@@ -35,18 +35,13 @@ export const PresenceState = z.enum([
 export type PresenceState = z.infer<typeof PresenceState>;
 
 /**
- * Mascot = a member's visual identity. Generated procedurally by @officehub/brand
- * from these traits, so it is deterministic and needs no image upload.
+ * Mascot = a member's visual identity, one of the 6 Desk Buddies (static clay-style PNG/WebP assets in
+ * @officehub/brand). Several members may pick the same buddy; the name tag tells them apart.
+ * Presence mood is shown as a badge + text label on top of the static pose (see PRESENCE_TO_MOOD).
  */
-export const MascotSpecies = z.enum(["blob", "cat", "owl", "bot", "fox", "bear"]);
-export const MascotPalette = z.enum(["sunrise", "ocean", "forest", "grape", "coral", "slate", "sand"]);
-export const MascotAccessory = z.enum(["headphones", "glasses", "cap", "scarf", "plant"]);
-export const Mascot = z.object({
-  species: MascotSpecies,
-  palette: MascotPalette,
-  accessory: MascotAccessory.nullable(),
-  seed: z.number().int().nonnegative(), // tie-breaker for small variations
-});
+export const MascotBuddy = z.enum(["milo", "sage", "pip", "blu", "mocha", "fern"]);
+export type MascotBuddy = z.infer<typeof MascotBuddy>;
+export const Mascot = z.object({ buddy: MascotBuddy });
 export type Mascot = z.infer<typeof Mascot>;
 
 export const Member = z.object({
