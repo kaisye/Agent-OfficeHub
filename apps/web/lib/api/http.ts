@@ -65,6 +65,7 @@ export function createHttpClient(opts: HttpClientOptions): ApiClient {
     acceptInvite: async (input) => void (await call(Routes.acceptInvite, {}, input)),
     inviteMember: (slug, memberId) => call(Routes.inviteMember, w(slug, { id: memberId }), {}),
     changePassword: async (slug, input) => void (await call(Routes.changePassword, w(slug), input)),
+    askAssistant: (slug, question, history) => call(Routes.askAssistant, w(slug), { question, history }),
     board: (slug) => call(Routes.board, w(slug)),
     updateMyStatus: async (slug, input) => void (await call(Routes.updateMyStatus, w(slug), input)),
     updateMyMascot: async (slug, input) => void (await call(Routes.updateMyMascot, w(slug), input)),

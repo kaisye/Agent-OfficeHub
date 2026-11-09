@@ -14,6 +14,7 @@ const LINKS: { href: string; label: string; icon: IconName; exact?: boolean; bad
   { href: "", label: "Văn phòng", icon: "office", exact: true },
   { href: "/requests", label: "Yêu cầu", icon: "request", badge: true },
   { href: "/decisions", label: "Quyết định", icon: "decision" },
+  { href: "/assistant", label: "Hỏi trợ lý", icon: "quote" },
   { href: "/agents", label: "Agent của tôi", icon: "bot" },
   { href: "/me/mascot", label: "Mascot của bạn", icon: "smile" },
 ];

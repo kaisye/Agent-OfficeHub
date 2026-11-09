@@ -35,6 +35,8 @@ export type InviteInfo = z.infer<(typeof Routes)["inviteInfo"]["res"]>;
 export type InviteLink = z.infer<(typeof Routes)["inviteMember"]["res"]>;
 export type AcceptInviteInput = Body<"acceptInvite">;
 export type ChangePasswordInput = Body<"changePassword">;
+export type AssistantTurn = { role: "user" | "assistant"; text: string };
+export type AssistantAnswer = z.infer<(typeof Routes)["askAssistant"]["res"]>;
 
 /** One interface, two implementations (http | mock). All calls are scoped by workspace slug. */
 export interface ApiClient {
@@ -72,6 +74,8 @@ export interface ApiClient {
   listMyAgents(slug: string): Promise<Agent[]>;
   createAgent(slug: string, input: CreateAgentInput): Promise<{ agent: Agent; token: string }>;
   revokeAgent(slug: string, id: Id): Promise<void>;
+  // read-only workspace assistant
+  askAssistant(slug: string, question: string, history: AssistantTurn[]): Promise<AssistantAnswer>;
   // handoff
   handoff(slug: string, taskId: Id): Promise<{ markdown: string }>;
   // realtime: returns an unsubscribe function

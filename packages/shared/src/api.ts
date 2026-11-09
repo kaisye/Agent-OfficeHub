@@ -180,6 +180,20 @@ export const Routes = {
     res: Decision,
   },
 
+  /**
+   * Read-only workspace assistant (v0.6). Answers with the ASKER's visibility; no write tools.
+   * History is kept by the client (last 8 turns, text only); nothing is stored server-side except an audit row.
+   */
+  askAssistant: {
+    method: "POST",
+    path: "/w/:slug/assistant",
+    body: z.object({
+      question: z.string().trim().min(1).max(2000),
+      history: z.array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().max(8000) })).max(16).default([]),
+    }),
+    res: z.object({ answer: z.string(), toolsUsed: z.array(z.string()) }),
+  },
+
   // agents (human manages own agents)
   listMyAgents: { method: "GET", path: "/w/:slug/agents", res: z.array(Agent) },
   createAgent: {

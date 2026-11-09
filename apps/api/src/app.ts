@@ -5,6 +5,7 @@ import { bodyLimit } from "hono/body-limit";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { streamSSE } from "hono/streaming";
 import { getConnInfo } from "@hono/node-server/conninfo";
+import { askAssistant } from "./assistant.js";
 import { ZodError, type z } from "zod";
 import { ChangeMessage as ChangeMessageSchema, Id, Routes } from "@officehub/shared";
 import {
@@ -304,6 +305,14 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
   const H = (c: Context) => c.get("human") as Human;
 
   app.get("/w/:slug/board", async (c) => c.json(await getBoard(H(c))));
+
+  app.post("/w/:slug/assistant", async (c) => {
+    const { question, history } = await parseBody(c, Routes.askAssistant.body);
+    const h = H(c);
+    const out = await askAssistant(h, question, history);
+    await auditStandalone(h.workspaceId, actorOf(h), { action: "assistant.ask", meta: { tools: out.toolsUsed } }).catch(() => {});
+    return c.json(out);
+  });
 
   app.post("/w/:slug/members/:id/invite", async (c) => {
     const id = Id.safeParse(c.req.param("id"));

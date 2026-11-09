@@ -1,0 +1,3 @@
+[mcp_servers.office-hub]
+url = "http://localhost:8788/mcp"
+bearer_token_env_var = "OFFICEHUB_AGENT_TOKEN"

@@ -726,6 +726,29 @@ export function createMockClient(opts: MockClientOptions = {}): ApiClient & { se
         void slug;
         return { url: `${typeof window === "undefined" ? "" : window.location.origin}/invite/${token}`, expiresAt: new Date(expires).toISOString() };
       }),
+    // Mock assistant: a tiny rule-based answer from the seed board (no Claude call) so the UI can be demoed offline.
+    askAssistant: (slug, question) =>
+      run((v) => {
+        const b = server.getBoard(slug, v);
+        const q = question.toLowerCase();
+        const meName = b.members.find((m) => m.id === v)?.displayName ?? "bạn";
+        const card = (id: string) => b.cards.find((c) => c.memberId === id);
+        const target = b.members.find((m) => m.id !== v && q.includes(m.displayName.toLowerCase()));
+        if (!target) {
+          const lines = b.members.map((m) => `• ${m.displayName}: ${card(m.id)?.branch ?? "(chưa ghi nhánh)"} · ${card(m.id)?.doing ?? "chưa cập nhật"}`);
+          return { answer: `(Chế độ mô phỏng) Nhánh của cả nhóm:\n${lines.join("\n")}`, toolsUsed: ["get_team_status"] };
+        }
+        const t = card(target.id);
+        const mine = card(v);
+        const shared = target.areas.filter((a) => b.members.find((m) => m.id === v)?.areas.includes(a));
+        const risk = shared.length
+          ? `Hai bạn cùng phụ trách ${shared.join(", ")}, nên có nguy cơ đụng file. Chưa kiểm chứng bằng danh sách file vì chế độ mô phỏng không nối GitHub.`
+          : "Hai bạn không chung khu vực phụ trách, nguy cơ conflict thấp (chưa kiểm chứng bằng danh sách file).";
+        return {
+          answer: `(Chế độ mô phỏng) ${target.displayName} đang ở nhánh ${t?.branch ?? "(chưa ghi)"}, đang làm: ${t?.doing ?? "chưa cập nhật"}.\n${meName} đang ở nhánh ${mine?.branch ?? "(chưa ghi)"}. ${risk}`,
+          toolsUsed: ["get_team_status", "compare_branches"],
+        };
+      }),
     changePassword: (_slug, { current, next }) =>
       run((v) => {
         const entry = [...mockCreds.entries()].find(([, c]) => c.memberId === v);
