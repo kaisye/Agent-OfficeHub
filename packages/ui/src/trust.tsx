@@ -91,7 +91,7 @@ export function UntrustedQuote({
       className={cn("rounded-oh-md border-l-4 border-oh-untrusted bg-oh-untrusted-soft p-3", className)}
     >
       <header className="mb-1 flex items-center gap-2 text-oh-xs font-medium text-oh-untrusted-soft-fg">
-        {author && <Mascot mascot={author.mascot} mood="relaxed" size={24} agentBadge={fromAgent} decorative />}
+        {author && <Mascot mascot={author.mascot} mood="relaxed" size={24} agentBadge={fromAgent} decorative noBadge />}
         <Icon name="quote" size={12} />
         <span>
           Từ {from}
@@ -170,7 +170,7 @@ export function DecisionCard({ decision, decidedBy, className }: { decision: Dec
   return (
     <Card as="article" className={className} aria-label={`Quyết định: ${decision.title}`}>
       <header className="flex items-start gap-3">
-        <Mascot mascot={decidedBy.mascot} mood="relaxed" size={48} decorative />
+        <Mascot mascot={decidedBy.mascot} mood="relaxed" size={48} decorative noBadge />
         <div className="min-w-0 flex-1">
           <h3 className="text-oh-lg font-semibold">{decision.title}</h3>
           <p className="text-oh-xs text-oh-ink-muted">

@@ -94,7 +94,7 @@ export function MemberCard({
           <li className="text-oh-xs text-oh-ink-muted">Chờ:</li>
           {waitingOnMembers.map((m) => (
             <li key={m.id} className="inline-flex items-center gap-1 rounded-oh-sm bg-oh-warning-soft py-0.5 pl-0.5 pr-2 text-oh-xs text-oh-warning-soft-fg">
-              <Mascot mascot={m.mascot} mood="relaxed" size={24} decorative />
+              <Mascot mascot={m.mascot} mood="relaxed" size={24} decorative noBadge />
               {m.displayName}
             </li>
           ))}

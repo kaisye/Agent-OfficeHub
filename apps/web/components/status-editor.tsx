@@ -100,7 +100,7 @@ export function StatusEditor({
                     on ? "border-oh-primary bg-oh-primary-soft text-oh-primary-soft-fg" : "border-oh-border bg-oh-surface hover:bg-oh-surface-2",
                   )}
                 >
-                  <Mascot mascot={m.mascot} mood="relaxed" size={24} decorative />
+                  <Mascot mascot={m.mascot} mood="relaxed" size={24} decorative noBadge />
                   {m.displayName}
                   {on && <Icon name="check" size={12} />}
                 </button>

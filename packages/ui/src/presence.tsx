@@ -101,7 +101,7 @@ export function StatusBadge({ presence, className }: { presence: PresenceState; 
     <span
       data-presence={presence}
       title={`Tâm trạng linh vật: ${MOOD_LABEL_VI[PRESENCE_TO_MOOD[presence]]}`}
-      className={cn("inline-flex items-center gap-1.5 rounded-oh-sm px-2 py-0.5 text-oh-xs font-medium", TONE[presence], className)}
+      className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded-oh-sm px-2 py-0.5 text-oh-xs font-medium", TONE[presence], className)}
     >
       <span aria-hidden="true" className="font-mono font-bold leading-none">{GLYPH[presence]}</span>
       {PRESENCE_LABEL_VI[presence]}

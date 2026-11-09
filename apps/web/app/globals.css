@@ -17,12 +17,63 @@ body {
 }
 a { color: inherit; }
 
-/* The "office floor": a soft dotted carpet the member cards stand on. */
-.oh-floor {
-  background-color: var(--oh-surface-2);
-  background-image: radial-gradient(color-mix(in srgb, var(--oh-ink-muted) 18%, transparent) 1.2px, transparent 1.2px);
-  background-size: 22px 22px;
+/* ---------- App shell (Desk Buddies: fixed 232px sidebar, 72px topbar) ---------- */
+.oh-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 30; width: 232px; display: flex; flex-direction: column; padding: 28px 17px 15px; background: var(--oh-surface-2); border-right: 1px solid var(--oh-border); }
+.oh-main-shell { margin-left: 232px; min-width: 0; }
+.oh-topbar { position: sticky; top: 0; z-index: 20; height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 34px; border-bottom: 1px solid var(--oh-border); background: color-mix(in srgb, var(--oh-surface) 70%, transparent); backdrop-filter: blur(8px); }
+.oh-content { padding: 29px 34px 40px; max-width: 1800px; margin: auto; animation: oh-appear .2s ease; }
+@keyframes oh-appear { from { opacity: .4; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+.oh-nav-link { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 13px; border-radius: 9px; font-size: 14px; color: var(--oh-ink-muted); transition: background .15s; }
+.oh-nav-link:hover { background: color-mix(in srgb, var(--oh-primary) 8%, transparent); }
+.oh-nav-link[aria-current="page"] { background: var(--oh-primary-soft); color: var(--oh-primary-soft-fg); font-weight: 600; }
+.oh-office-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 22px; align-items: start; }
+@media (max-width: 1200px) { .oh-sidebar { width: 205px; padding-inline: 13px; } .oh-main-shell { margin-left: 205px; } .oh-content { padding: 25px; } .oh-topbar { padding: 0 25px; } .oh-office-layout { grid-template-columns: minmax(0, 1fr) 260px; gap: 16px; } }
+@media (max-width: 1020px) { .oh-sidebar { width: 190px; } .oh-main-shell { margin-left: 190px; } .oh-office-layout { grid-template-columns: 1fr; } .oh-today { display: none; } .oh-kanban { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+@media (max-width: 760px) {
+  .oh-sidebar { width: 68px; padding: 22px 10px 10px; align-items: center; }
+  .oh-sidebar .oh-hide-sm { display: none; }
+  .oh-nav-link { justify-content: center; padding: 13px 6px; }
+  .oh-main-shell { margin-left: 68px; }
+  .oh-topbar { height: 60px; padding: 0 16px; }
+  .oh-content { padding: 20px 14px 32px; }
+  .oh-kanban { grid-template-columns: 1fr !important; }
 }
+
+/* ---------- 2D office map: CSS grid + furniture divs + workstation buttons ---------- */
+.oh-floorplan { position: relative; isolation: isolate; overflow: hidden; margin: 0 14px; padding: 58px 22px 74px; border: 1px solid color-mix(in srgb, var(--oh-office-wood) 28%, var(--oh-border)); border-radius: 12px;
+  background: repeating-linear-gradient(90deg, transparent 0, transparent 72px, color-mix(in srgb, var(--oh-office-floor-line) 70%, transparent) 73px, color-mix(in srgb, var(--oh-office-floor-line) 70%, transparent) 74px), var(--oh-office-floor);
+  box-shadow: inset 0 10px 25px rgba(185, 148, 103, .19); min-height: 400px; }
+.oh-floorplan::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 24px; background: var(--oh-office-wall); z-index: -1; }
+.oh-window { position: absolute; top: 0; width: 96px; height: 12px; background: repeating-linear-gradient(90deg, #aebca3 0, #d6dfcb 26px, #947e5d 27px, #947e5d 29px); border: 3px solid #b5a281; border-top: 0; box-shadow: 5px 25px 40px 16px rgba(255, 254, 243, .5); z-index: -1; }
+.oh-rug { position: absolute; z-index: -1; left: 14%; right: 14%; top: 14%; bottom: 14%; background: var(--oh-office-rug); border-radius: 70px 70px 20px 20px; border: 7px solid color-mix(in srgb, var(--oh-office-rug) 80%, #8a7a50); opacity: .55; }
+.oh-desks { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 24px 20px; }
+.oh-ws { position: relative; min-width: 0; display: flex; flex-direction: column; align-items: center; padding: 6px 8px 10px; border: 1px solid transparent; border-radius: 15px; text-align: center; transition: background .15s, transform .15s, border-color .15s; cursor: pointer; }
+.oh-ws:hover { background: color-mix(in srgb, #fff8e7 55%, transparent); border-color: color-mix(in srgb, var(--oh-office-wood) 60%, transparent); transform: translateY(-2px); }
+.oh-ws:focus-visible { outline-offset: 2px; }
+.oh-ws[data-me="true"] { border-color: var(--oh-primary); background: color-mix(in srgb, var(--oh-primary) 7%, transparent); }
+.oh-tag { max-width: 100%; display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border: 1px solid var(--oh-border); border-radius: 7px; background: var(--oh-surface); font-size: 12px; font-weight: 600; color: var(--oh-ink); box-shadow: 0 3px 5px rgba(89, 64, 50, .06); z-index: 4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.oh-desk-mascot { margin-bottom: -16px; z-index: 1; pointer-events: none; margin-top: 4px; }
+.oh-desk { position: relative; height: 34px; width: 100%; max-width: 168px; background: linear-gradient(0deg, var(--oh-office-wood-dark) 0, var(--oh-office-wood-dark) 4px, var(--oh-office-wood) 4px, var(--oh-office-wood-light) 100%); border: 1px solid #9a7554; border-radius: 7px; box-shadow: 0 5px 0 rgba(89, 64, 50, .13), 4px 10px 9px rgba(89, 64, 50, .07); z-index: 2; }
+.oh-desk::before, .oh-desk::after { content: ""; position: absolute; width: 5px; height: 12px; background: #705039; bottom: -12px; border-radius: 0 0 2px 2px; }
+.oh-desk::before { left: 12px; } .oh-desk::after { right: 12px; }
+.oh-monitor { position: absolute; left: calc(50% - 19px); bottom: 13px; width: 39px; height: 27px; background: #586760; border: 3px solid #414a42; border-bottom-width: 5px; border-radius: 4px; transform: perspective(80px) rotateX(-10deg); box-shadow: 2px 3px 3px rgba(89, 64, 50, .13); }
+.oh-ws[data-presence="working"] .oh-monitor { background: color-mix(in srgb, var(--oh-brand-cobalt) 55%, #586760); }
+.oh-ws[data-presence="offline"] .oh-monitor { background: #3d4540; }
+.oh-keyboard { position: absolute; left: calc(50% - 12px); bottom: 2px; width: 27px; height: 7px; border-radius: 2px; background: #e0d5bc; }
+.oh-mug { position: absolute; right: 14px; bottom: 10px; width: 10px; height: 10px; border-radius: 50%; background: #ede6d4; border: 2px solid #dfd1b9; }
+.oh-book { position: absolute; left: 12px; bottom: 6px; width: 14px; height: 17px; background: var(--oh-brand-forest); transform: rotate(-12deg); border-radius: 2px; box-shadow: 2px 2px #e7d9be; }
+.oh-plant { position: absolute; width: 30px; height: 30px; border-radius: 50%; background: #b49672; border: 5px solid #c1a480; box-shadow: 4px 6px 5px rgba(89, 64, 50, .08); z-index: 3; }
+.oh-plant::before, .oh-plant::after { content: ""; position: absolute; width: 16px; height: 26px; border-radius: 100% 0; background: #78966d; left: 2px; top: -24px; transform: rotate(-20deg); }
+.oh-plant::after { left: 8px; transform: rotate(35deg) scaleX(-1); background: #587a50; }
+.oh-lounge { position: absolute; left: 22px; bottom: 18px; display: flex; align-items: center; gap: 12px; z-index: 0; }
+.oh-sofa { display: flex; gap: 2px; width: 104px; height: 33px; padding: 3px; background: #a4663d; border: 3px solid #995a34; border-bottom-width: 6px; border-radius: 8px; box-shadow: 2px 5px 4px rgba(89, 64, 50, .15); transform: rotate(-1deg); }
+.oh-sofa span { flex: 1; background: #bd8255; border-radius: 4px; }
+.oh-coffee { width: 38px; height: 22px; background: #7e6848; border: 3px solid #a1825e; border-radius: 50%; box-shadow: 0 3px #6a5238; }
+.oh-shelf { position: absolute; right: 22px; bottom: 16px; width: 70px; height: 34px; display: flex; gap: 3px; padding: 3px; background: #937451; border: 4px solid #a0835c; box-shadow: 4px 4px rgba(89, 64, 50, .08); }
+.oh-shelf i { flex: 1; background: repeating-linear-gradient(90deg, var(--oh-brand-forest) 0, var(--oh-brand-forest) 4px, #ddcbb0 4px, #ddcbb0 6px, var(--oh-brand-cognac) 6px, var(--oh-brand-cognac) 10px); }
+.oh-arch { border-radius: 110px 110px 12px 12px; display: flex; justify-content: center; align-items: flex-end; }
+@media (max-width: 760px) { .oh-floorplan { margin: 0 9px; padding: 52px 12px 70px; } .oh-desks { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 8px; } .oh-shelf { display: none; } }
+@media (prefers-reduced-motion: reduce) { .oh-content { animation: none; } .oh-ws { transition: none; } }
 
 .oh-skeleton {
   background: linear-gradient(90deg, var(--oh-surface-2) 0%, var(--oh-border) 50%, var(--oh-surface-2) 100%);
@@ -52,3 +103,13 @@ a { color: inherit; }
 .oh-prose blockquote { border-left: 4px solid var(--oh-untrusted); background: var(--oh-untrusted-soft); padding: .35rem .75rem; margin: .25rem 0; border-radius: 6px; font-size: .875rem; }
 .oh-prose em { color: var(--oh-ink-muted); }
 .oh-prose code { font-family: var(--oh-font-mono, monospace); font-size: .85em; }
+
+/* On the desk map the desk covers the buddy's feet, so badges sit at the top corners. */
+.oh-desk-mascot [data-mood-badge] { bottom: auto; top: 6px; right: -4px; }
+.oh-desk-mascot [data-agent-badge] { bottom: auto; top: 6px; left: -4px; }
+
+/* Warm dark office floor (the light floor tones would wash out the cream text). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --oh-office-floor: #2B251E; --oh-office-floor-line: #352E25; --oh-office-wall: #3A3228; --oh-office-rug: #3A3326; }
+}
+:root[data-theme="dark"] { --oh-office-floor: #2B251E; --oh-office-floor-line: #352E25; --oh-office-wall: #3A3228; --oh-office-rug: #3A3326; }

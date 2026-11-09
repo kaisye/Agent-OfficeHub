@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import { Badge, Button, Icon, cn } from "./primitives.js";
 
 /* ---------- Dialog ---------- */
+/** Open dialogs, topmost last: only the topmost reacts to Escape / Tab (a confirm dialog inside a drawer). */
+const OPEN: HTMLElement[] = [];
 const FOCUSABLE = 'a[href],button:not([disabled]),textarea,input,select,[tabindex]:not([tabindex="-1"])';
 
 export function Dialog({
@@ -38,8 +40,10 @@ export function Dialog({
     if (!open) return;
     const prev = document.activeElement as HTMLElement | null;
     const el = ref.current;
+    if (el) OPEN.push(el);
     (el?.querySelector<HTMLElement>("[data-autofocus]") ?? el?.querySelector<HTMLElement>(FOCUSABLE) ?? el)?.focus();
     const onKey = (e: KeyboardEvent) => {
+      if (OPEN[OPEN.length - 1] !== el) return;
       if (e.key === "Escape") {
         e.stopPropagation();
         onCloseRef.current();
@@ -56,6 +60,7 @@ export function Dialog({
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
+      if (el) OPEN.splice(OPEN.indexOf(el), 1);
       // Return focus to the opener, but only if it is still in the document.
       if (prev && prev.isConnected) prev.focus();
     };

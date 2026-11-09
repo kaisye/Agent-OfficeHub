@@ -88,7 +88,7 @@ export function LoginScreen() {
                     aria-label={`Đăng nhập là ${m.displayName}`}
                     className="flex w-full flex-col items-center gap-1 rounded-oh-lg border border-oh-border bg-oh-bg p-3 transition-shadow hover:shadow-oh-md focus-visible:outline-3 focus-visible:outline-oh-focus disabled:opacity-60"
                   >
-                    <Mascot mascot={m.mascot} mood="relaxed" size={48} decorative />
+                    <Mascot mascot={m.mascot} mood="relaxed" size={48} decorative noBadge />
                     <span className="text-oh-sm font-medium">{m.displayName}</span>
                     <span className="text-oh-xs text-oh-ink-muted">{m.workspaceSlug}</span>
                   </button>

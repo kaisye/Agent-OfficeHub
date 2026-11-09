@@ -1,16 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type KeyboardEvent } from "react";
-import { ACTION_LABEL_VI, Badge, Button, EmptyState, RequestCard, cn } from "@officehub/ui";
-import type { Request, RequestAction } from "@officehub/shared";
+import { Badge, Button, Drawer, EmptyState, Icon, Mascot, cn, relativeTimeVi, requestDirectionLabel, requestStatusText } from "@officehub/ui";
+import type { Member, Request, RequestStatus } from "@officehub/shared";
 import { useBoard, useInbox, useRequests } from "@/lib/hooks";
 import { memberMap, needsMe } from "@/lib/requests";
-import { errorMessage } from "@/lib/errors";
-import { useActionRunner } from "./action-runner";
-import { Field, TextArea } from "./form";
 import { NewRequestDialog } from "./new-request-dialog";
+import { RequestDetail } from "./request-detail";
 import { ListSkeleton } from "./skeletons";
 import { useWorkspace } from "./workspace";
 
@@ -21,30 +18,27 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "all", label: "Tất cả" },
 ];
 
+const COLUMNS: { id: string; label: string; dot: string; statuses: RequestStatus[] }[] = [
+  { id: "draft", label: "Bản nháp", dot: "var(--oh-agent)", statuses: ["draft", "reply_drafted"] },
+  { id: "sent", label: "Đã gửi", dot: "var(--oh-warning)", statuses: ["sent"] },
+  { id: "replied", label: "Đã có trả lời", dot: "var(--oh-brand-cognac)", statuses: ["replied"] },
+  { id: "done", label: "Xong", dot: "var(--oh-success)", statuses: ["closed", "cancelled"] },
+];
+
 export function RequestsScreen() {
   const { slug, me } = useWorkspace();
   const router = useRouter();
   const params = useSearchParams();
   const tab = (TABS.find((t) => t.id === params.get("tab"))?.id ?? "mine") as Tab;
+  const openId = params.get("open");
   const board = useBoard(slug);
   const inbox = useInbox(slug);
   const all = useRequests(slug);
   const [creating, setCreating] = useState(false);
   const members = board.data?.members ?? [];
-  // Text the server rejected (e.g. secret_detected). The card's inline composer clears itself on submit,
-  // so we keep the text here, under the card, until it is sent or dismissed.
-  const [failed, setFailed] = useState<Record<string, FailedBody>>({});
-  const runner = useActionRunner(
-    slug,
-    members,
-    me.id,
-    (_a, r) => setFailed(({ [r.id]: _gone, ...rest }) => rest),
-    (f, e) => setFailed((cur) => ({ ...cur, [f.request.id]: { action: f.action, request: f.request, body: f.body, message: errorMessage(e) } })),
-  );
 
   const mine = needsMe(inbox.data, board.data, me.id);
-  const list: Request[] =
-    tab === "mine" ? mine : tab === "asked" ? (all.data ?? []).filter((r) => r.askerId === me.id) : (all.data ?? []);
+  const list: Request[] = tab === "mine" ? mine : tab === "asked" ? (all.data ?? []).filter((r) => r.askerId === me.id) : (all.data ?? []);
   const counts: Record<Tab, number> = {
     mine: mine.length,
     asked: (all.data ?? []).filter((r) => r.askerId === me.id && !["closed", "cancelled"].includes(r.status)).length,
@@ -53,7 +47,9 @@ export function RequestsScreen() {
   const loading = !board.data || !all.data || !inbox.data;
   const map = memberMap(members);
 
-  const setTab = (t: Tab) => router.replace(`/w/${slug}/requests?tab=${t}`, { scroll: false });
+  const url = (t: Tab, open?: string | null) => `/w/${slug}/requests?tab=${t}${open ? `&open=${open}` : ""}`;
+  const setTab = (t: Tab) => router.replace(url(t), { scroll: false });
+  const openRequest = (id: string | null) => router.replace(url(tab, id), { scroll: false });
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
     if (!step) return;
@@ -68,15 +64,16 @@ export function RequestsScreen() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-oh-2xl font-bold">Yêu cầu</h1>
-          <p className="text-oh-sm text-oh-ink-muted">Agent chỉ soạn nháp. Chỉ bạn mới bấm gửi.</p>
+          <p className="mb-2 text-[11px] font-semibold tracking-[0.15em] text-oh-ink-muted">TRAO ĐỔI GIỮA CÁC BẠN</p>
+          <h1 className="text-oh-3xl font-bold tracking-tight">Yêu cầu</h1>
+          <p className="mt-1 text-oh-sm text-oh-ink-muted">Agent chỉ soạn nháp. Chỉ bạn mới bấm gửi.</p>
         </div>
         <Button variant="primary" icon="request" onClick={() => setCreating(true)}>
           Tạo yêu cầu
         </Button>
       </div>
 
-      <div role="tablist" aria-label="Lọc yêu cầu" onKeyDown={onKey} className="flex gap-1 overflow-x-auto border-b border-oh-border">
+      <div role="tablist" aria-label="Lọc yêu cầu" onKeyDown={onKey} className="flex flex-wrap gap-1">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -88,8 +85,8 @@ export function RequestsScreen() {
             tabIndex={tab === t.id ? 0 : -1}
             onClick={() => setTab(t.id)}
             className={cn(
-              "inline-flex shrink-0 items-center gap-2 border-b-2 px-3 py-2 text-oh-sm font-medium focus-visible:outline-3 focus-visible:outline-oh-focus",
-              tab === t.id ? "border-oh-primary text-oh-ink" : "border-transparent text-oh-ink-muted hover:text-oh-ink",
+              "inline-flex shrink-0 items-center gap-2 rounded-oh-md px-3.5 py-2 text-oh-sm font-medium focus-visible:outline-3 focus-visible:outline-oh-focus",
+              tab === t.id ? "bg-oh-primary-soft text-oh-primary-soft-fg" : "text-oh-ink-muted hover:bg-oh-surface-2",
             )}
           >
             {t.label}
@@ -104,71 +101,77 @@ export function RequestsScreen() {
         ) : list.length === 0 ? (
           <EmptyForTab tab={tab} onCreate={() => setCreating(true)} mascot={me.mascot} />
         ) : (
-          <ul className="space-y-4">
-            {list.map((r) => {
-              const asker = map.get(r.askerId);
-              const receiver = map.get(r.receiverId);
-              if (!asker || !receiver) return null;
+          <div className="oh-kanban grid items-start gap-4" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}>
+            {COLUMNS.map((col) => {
+              const items = list.filter((r) => col.statuses.includes(r.status));
               return (
-                <li key={r.id} className="space-y-1">
-                  <RequestCard
-                    request={r}
-                    asker={asker}
-                    receiver={receiver}
-                    viewerMemberId={me.id}
-                    detailHref={`/w/${slug}/requests/${r.id}`}
-                    linkAs={Link}
-                    onAction={runner.handle}
-                    onEditDraft={() => router.push(`/w/${slug}/requests/${r.id}?edit=1`)}
-                  />
-                  {failed[r.id] && (
-                    <FailedBodyPanel
-                      failed={failed[r.id]!}
-                      onChange={(body) => setFailed((cur) => ({ ...cur, [r.id]: { ...cur[r.id]!, body } }))}
-                      onRetry={() => runner.handle(failed[r.id]!.action, r, failed[r.id]!.body.trim())}
-                      onDismiss={() => setFailed(({ [r.id]: _gone, ...rest }) => rest)}
-                    />
+                <section key={col.id} aria-label={col.label} className="min-h-40 rounded-oh-lg bg-oh-surface-2 p-3">
+                  <header className="mb-3 flex items-center gap-2 px-0.5">
+                    <span aria-hidden="true" className="size-2 rounded-oh-full" style={{ background: col.dot }} />
+                    <h2 className="text-oh-sm font-semibold">{col.label}</h2>
+                    <span className="ml-auto text-oh-xs text-oh-ink-muted">{items.length}</span>
+                  </header>
+                  {items.length === 0 ? (
+                    <p className="rounded-oh-md border border-dashed border-oh-border-strong px-3 py-6 text-center text-oh-xs text-oh-ink-muted">Trống</p>
+                  ) : (
+                    <ul className="space-y-3">
+                      {items.map((r) => (
+                        <li key={r.id}>
+                          <KanbanCard request={r} asker={map.get(r.askerId)} receiver={map.get(r.receiverId)} meId={me.id} onOpen={() => openRequest(r.id)} />
+                        </li>
+                      ))}
+                    </ul>
                   )}
-                </li>
+                </section>
               );
             })}
-          </ul>
+          </div>
         )}
       </div>
 
-      {runner.dialog}
+      <Drawer open={!!openId} onClose={() => openRequest(null)} title="Chi tiết yêu cầu">
+        {openId && <RequestDetail id={openId} embedded />}
+      </Drawer>
       <NewRequestDialog open={creating} onClose={() => setCreating(false)} slug={slug} members={members} tasks={board.data?.tasks ?? []} meId={me.id} />
     </div>
   );
 }
 
-interface FailedBody {
-  action: RequestAction;
-  request: Request;
-  body: string;
-  message: string;
-}
-
-function FailedBodyPanel({ failed, onChange, onRetry, onDismiss }: { failed: FailedBody; onChange: (v: string) => void; onRetry: () => void; onDismiss: () => void }) {
-  const id = `failed-${failed.request.id}`;
+function KanbanCard({ request: r, asker, receiver, meId, onOpen }: { request: Request; asker?: Member; receiver?: Member; meId: string; onOpen: () => void }) {
+  if (!asker || !receiver) return null;
+  const side = meId === r.askerId ? "asker" : meId === r.receiverId ? "receiver" : "observer";
+  const other = side === "receiver" ? asker : receiver;
+  const { label } = requestStatusText(r, side, other.displayName);
+  const last = r.messages[r.messages.length - 1];
+  const agentDraft = !!last && last.sentById === null && last.authoredBy === "agent";
+  const overdue = !!r.dueAt && ["sent", "reply_drafted", "replied"].includes(r.status) && new Date(r.dueAt).getTime() < Date.now();
   return (
-    <div role="group" aria-labelledby={`${id}-h`} className="space-y-2 rounded-oh-lg border border-oh-danger bg-oh-danger-soft p-3 text-oh-danger-soft-fg">
-      <p id={`${id}-h`} className="text-oh-sm font-medium">
-        Chưa gửi được. Mình giữ nguyên nội dung của bạn, sửa rồi gửi lại nhé.
-      </p>
-      <p className="text-oh-xs">{failed.message}</p>
-      <Field label="Nội dung của bạn">
-        {(fid) => <TextArea id={fid} rows={3} value={failed.body} onChange={(e) => onChange(e.target.value)} />}
-      </Field>
-      <div className="flex gap-2">
-        <Button variant="ghost" size="sm" onClick={onDismiss}>
-          Bỏ nội dung
-        </Button>
-        <Button variant="primary" size="sm" disabled={!failed.body.trim()} onClick={onRetry}>
-          {ACTION_LABEL_VI[failed.action]}
-        </Button>
-      </div>
-    </div>
+    <article
+      aria-label={`Yêu cầu: ${r.title}`}
+      data-status={r.status}
+      className={cn("rounded-oh-md border bg-oh-surface shadow-oh-sm transition hover:-translate-y-0.5 hover:border-oh-border-strong", agentDraft ? "border-dashed border-oh-agent" : "border-oh-border")}
+    >
+      <button type="button" onClick={onOpen} aria-label={`Mở chi tiết: ${r.title}`} className="block w-full rounded-oh-md p-3.5 text-left focus-visible:outline-3 focus-visible:outline-oh-focus">
+        <p className="mb-2 flex items-center gap-1.5 text-oh-xs font-medium text-oh-ink-muted">
+          {r.unreadForViewer && <span role="img" aria-label="Chưa đọc" data-unread className="size-2 shrink-0 rounded-oh-full bg-oh-primary" />}
+          {agentDraft && <Icon name="bot" size={13} className="text-oh-agent" />}
+          <span className={agentDraft ? "text-oh-agent" : undefined}>{requestDirectionLabel(r, meId, asker.displayName, receiver.displayName)}</span>
+        </p>
+        <h3 className="text-oh-sm font-semibold">{r.title}</h3>
+        {last && <p className="mt-1.5 line-clamp-2 text-oh-xs text-oh-ink-muted">{last.body}</p>}
+        <footer className="mt-3 flex items-center justify-between gap-2 border-t border-oh-border pt-2.5">
+          <span className="flex min-w-0 items-center gap-1.5 text-oh-xs">
+            <Mascot mascot={other.mascot} mood="relaxed" size={24} decorative noBadge />
+            <span className="truncate">{other.displayName}</span>
+          </span>
+          <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+            {overdue && <Badge tone="danger" icon="alert">Quá hạn</Badge>}
+            <Badge tone={r.status === "closed" ? "success" : r.status === "cancelled" ? "neutral" : agentDraft ? "agent" : "warning"}>{label}</Badge>
+          </span>
+        </footer>
+        <small className="mt-1.5 block text-[11px] text-oh-ink-muted">{relativeTimeVi(r.updatedAt)}</small>
+      </button>
+    </article>
   );
 }
 
