@@ -23,6 +23,8 @@ import {
   listAudit,
   listDecisions,
   listInbox,
+  markRead,
+  canViewRequest,
   listMyAgents,
   listRequests,
   looksLikeAgentToken,
@@ -259,8 +261,21 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
       const queue: { kind: string; id: string }[] = [];
       let wake: (() => void) | null = null;
       const off = hub.subscribe(h.workspaceId, (m) => {
-        queue.push({ kind: m.kind, id: m.id });
-        wake?.();
+        const push = () => {
+          queue.push({ kind: m.kind, id: m.id });
+          wake?.();
+        };
+        // C13: never leak the existence of requests (or their events) the viewer cannot see.
+        if (m.kind === "request") void canViewRequest(h, m.id).then((ok) => ok && push());
+        else if (m.kind === "event") {
+          void withWorkspace(h.workspaceId, async (tx) => (await tx`SELECT type, data FROM events WHERE id = ${m.id}`)[0])
+            .then(async (e) => {
+              if (!e) return;
+              if (!String(e.type).startsWith("request.")) return push();
+              if (typeof e.data?.requestId === "string" && (await canViewRequest(h, e.data.requestId))) push();
+            })
+            .catch(() => {});
+        } else push();
       });
       let closed = false;
       stream.onAbort(() => {
@@ -288,6 +303,11 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
   });
 
   app.get("/w/:slug/requests", async (c) => c.json(await listRequests(H(c))));
+  app.get("/w/:slug/inbox", async (c) => c.json(await listInbox(H(c), { actionOnly: true })));
+  app.post("/w/:slug/requests/:id/read", async (c) => {
+    await markRead(H(c), uuidParam(c, "id"));
+    return c.json({ ok: true });
+  });
   app.post("/w/:slug/requests", async (c) => {
     const body = await parseBody(c, Routes.createRequest.body);
     return c.json(await createRequestDraft(H(c), body), 201);
@@ -327,7 +347,7 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
         await auditStandalone(a.workspaceId, { kind: "agent", agentId: a.agentId!, memberId: a.ownerId! }, { action: "auth.rejected", outcome: "token_revoked" }).catch(() => {});
       throw new HubError(a.reason === "revoked" ? "token_revoked" : "unauthenticated", a.reason === "revoked" ? "Token has been revoked" : "Unknown token", 401);
     }
-    const wait = config.limiter.check(a.principal.agentId, false);
+    const wait = config.limiter.check(a.principal.agentId, "any");
     if (wait) {
       c.header("Retry-After", String(wait));
       throw new HubError("rate_limited", `Too many requests; retry in ${wait}s`, 429);
@@ -339,8 +359,8 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
   // Lightweight endpoint for hooks (Claude Code SessionStart / UserPromptSubmit): unread inbox, wrapped as untrusted.
   app.get("/agent/inbox", async (c) => {
     const a = c.get("agent");
-    const items = await listInbox(a, { unreadOnly: c.req.query("unread") === "1", markSeen: c.req.query("mark") === "1" });
-    await withWorkspace(a.workspaceId, (tx) => audit(tx, a.workspaceId, actorOf(a), { action: "agent.inbox", meta: { count: items.length } }));
+    const items = await listInbox(a, { unreadOnly: c.req.query("unread") === "1", markRead: c.req.query("mark") === "1" });
+    await withWorkspace(a.workspaceId, (tx) => audit(tx, a.workspaceId, actorOf(a), { action: "agent.inbox", via: "api", meta: { count: items.length } }));
     return c.json(wrapInbox(a.ownerId, items));
   });
 

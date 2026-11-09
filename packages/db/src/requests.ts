@@ -214,6 +214,7 @@ export async function actOnRequest(p: Principal, requestId: string, action: Requ
   return withWorkspace(p.workspaceId, async (tx) => {
     const [r] = await tx`SELECT * FROM requests WHERE id = ${requestId} FOR UPDATE`;
     if (!r || (me !== r.asker_id && me !== r.receiver_id)) throw notFound("request");
+    if (r.status === "draft" && me !== r.asker_id) throw notFound("request"); // C13: someone else's unsent draft does not exist for you
     // The ONLY place a status changes. Human-only steps are enforced here, not in the UI.
     const t = canTransition({ status: r.status, askerId: r.asker_id, receiverId: r.receiver_id }, action, actor);
     if (!t.ok) {
