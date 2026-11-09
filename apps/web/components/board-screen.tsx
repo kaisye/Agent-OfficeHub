@@ -9,6 +9,8 @@ import { useBoard, useInbox } from "@/lib/hooks";
 import { memberMap, needsMe } from "@/lib/requests";
 import { requestStatusText } from "@officehub/ui";
 import { NewRequestDialog } from "./new-request-dialog";
+import { PulseOnChange } from "./pulse";
+import { SimulateTeammate } from "./simulate-teammate";
 import { PageSkeleton } from "./skeletons";
 import { StatusEditor } from "./status-editor";
 import { useWorkspace } from "./workspace";
@@ -44,9 +46,12 @@ export function BoardScreen() {
             {summary(b)} · cập nhật trực tiếp, không cần tải lại.
           </p>
         </div>
-        <Button variant="primary" icon="request" onClick={() => setCreating(true)}>
-          Tạo yêu cầu
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <SimulateTeammate slug={slug} />
+          <Button variant="primary" icon="request" onClick={() => setCreating(true)}>
+            Tạo yêu cầu
+          </Button>
+        </div>
       </div>
 
       <NeedsYou requests={mine} members={b.members} slug={slug} meId={me.id} />
@@ -86,6 +91,9 @@ function NeedsYou({ requests, members, slug, meId }: { requests: Request[]; memb
       </Card>
     );
   }
+  // My own unsent drafts (agent-drafted asks) are kept apart from things other people are waiting on.
+  const drafts = requests.filter((r) => r.askerId === meId && r.status === "draft");
+  const others = requests.filter((r) => !(r.askerId === meId && r.status === "draft"));
   return (
     <Card as="section" aria-labelledby="needs-h" className="border-oh-primary bg-oh-primary-soft/40">
       <div className="flex items-center justify-between gap-2">
@@ -97,33 +105,49 @@ function NeedsYou({ requests, members, slug, meId }: { requests: Request[]; memb
           Xem tất cả
         </Link>
       </div>
-      <ul className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
-        {requests.slice(0, 4).map((r) => {
-          const side = r.askerId === meId ? "asker" : "receiver";
-          const other = map.get(side === "asker" ? r.receiverId : r.askerId);
-          const { label } = requestStatusText(r, side, other?.displayName ?? "");
-          return (
-            <li key={r.id} className="min-w-0">
-              <Link
-                href={`/w/${slug}/requests/${r.id}`}
-                className="flex min-w-0 items-center gap-3 rounded-oh-lg border border-oh-border bg-oh-surface p-3 hover:shadow-oh-md focus-visible:outline-3 focus-visible:outline-oh-focus"
-              >
-                {other && <Mascot mascot={other.mascot} mood="relaxed" size={32} title={other.displayName} />}
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2">
-                    {r.unreadForViewer && <span role="img" aria-label="Chưa đọc" className="size-2.5 shrink-0 rounded-oh-full bg-oh-primary" />}
-                    <span className="truncate text-oh-sm font-medium">{r.title}</span>
-                  </span>
-                  <span className="block truncate text-oh-xs text-oh-ink-muted">
-                    {label} · {other?.displayName} · {relativeTimeVi(r.updatedAt)}
-                  </span>
-                </span>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
+      {others.length > 0 && <NeedsList items={others.slice(0, 4)} map={map} slug={slug} meId={meId} labelledBy="needs-h" />}
+      {drafts.length > 0 && (
+        <div className={others.length > 0 ? "mt-4" : "mt-3"}>
+          <h3 id="drafts-h" className="mb-2 flex items-center gap-2 text-oh-sm font-semibold text-oh-ink-muted">
+            <Icon name="draft" size={14} />
+            Nháp agent chờ bạn gửi
+            <Badge tone="agent">{drafts.length}</Badge>
+          </h3>
+          <NeedsList items={drafts.slice(0, 4)} map={map} slug={slug} meId={meId} labelledBy="drafts-h" />
+        </div>
+      )}
     </Card>
+  );
+}
+
+function NeedsList({ items, map, slug, meId, labelledBy }: { items: Request[]; map: Map<string, Member>; slug: string; meId: string; labelledBy: string }) {
+  return (
+    <ul aria-labelledby={labelledBy} className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+      {items.map((r) => {
+        const side = r.askerId === meId ? "asker" : "receiver";
+        const other = map.get(side === "asker" ? r.receiverId : r.askerId);
+        const { label } = requestStatusText(r, side, other?.displayName ?? "");
+        return (
+          <li key={r.id} className="min-w-0">
+            <Link
+              href={`/w/${slug}/requests/${r.id}`}
+              className="flex min-w-0 items-center gap-3 rounded-oh-lg border border-oh-border bg-oh-surface p-3 hover:shadow-oh-md focus-visible:outline-3 focus-visible:outline-oh-focus"
+            >
+              {other && <Mascot mascot={other.mascot} mood="relaxed" size={32} title={other.displayName} />}
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2">
+                  {r.unreadForViewer && <span role="img" aria-label="Chưa đọc" className="size-2.5 shrink-0 rounded-oh-full bg-oh-primary" />}
+                  <span className="truncate text-oh-sm font-medium">{r.title}</span>
+                </span>
+                <span className="block truncate text-oh-xs text-oh-ink-muted">
+                  {label} · {other?.displayName} · {relativeTimeVi(r.updatedAt)}
+                </span>
+              </span>
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -143,7 +167,9 @@ function WaitingStrip({ board }: { board: Board }) {
             className="inline-flex items-center gap-1.5 rounded-oh-full bg-oh-warning-soft py-0.5 pl-0.5 pr-3 text-oh-sm text-oh-warning-soft-fg"
             aria-label={`${p.from!.displayName} đang chờ ${p.to!.displayName}`}
           >
-            <Mascot mascot={p.from!.mascot} presence={p.presence} size={24} title={p.from!.displayName} />
+            <PulseOnChange value={p.presence} className="rounded-oh-full">
+              <Mascot mascot={p.from!.mascot} presence={p.presence} size={24} title={p.from!.displayName} />
+            </PulseOnChange>
             <span className="font-medium">{p.from!.displayName}</span>
             <Icon name="reply" size={14} className="rotate-180" />
             <Mascot mascot={p.to!.mascot} mood="relaxed" size={24} title={p.to!.displayName} />
@@ -184,7 +210,9 @@ function OfficeFloor({ board }: { board: Board }) {
             <li key={m.id} className={mineCard && editing ? "sm:col-span-2 xl:col-span-3" : undefined}>
               {mineCard ? (
                 <div className="space-y-2">
-                  <MemberCard member={m} status={status} waitingOnMembers={waiting} className="ring-2 ring-oh-primary ring-offset-2 ring-offset-transparent" />
+                  <PulseOnChange value={status?.presence ?? "offline"}>
+                    <MemberCard member={m} status={status} waitingOnMembers={waiting} className="ring-2 ring-oh-primary ring-offset-2 ring-offset-transparent" />
+                  </PulseOnChange>
                   {editing ? (
                     <StatusEditor slug={slug} me={me} members={board.members} current={status} onClose={() => setEditing(false)} />
                   ) : (
@@ -200,7 +228,9 @@ function OfficeFloor({ board }: { board: Board }) {
                 </div>
               ) : (
                 <div className="space-y-1">
-                  <MemberCard member={m} status={status} waitingOnMembers={waiting} className="h-full" />
+                  <PulseOnChange value={status?.presence ?? "offline"} className="h-full">
+                    <MemberCard member={m} status={status} waitingOnMembers={waiting} className="h-full" />
+                  </PulseOnChange>
                   {status && <p className="px-1 text-oh-xs text-oh-ink-muted">Cập nhật {relativeTimeVi(status.updatedAt)}</p>}
                 </div>
               )}

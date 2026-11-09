@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, type ReactNode } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
-import type { Member } from "@officehub/shared";
+import type { Me } from "@officehub/shared";
 import { isApiError } from "@/lib/api";
 import { useMe, useRealtime } from "@/lib/hooks";
 import { PageSkeleton } from "./skeletons";
@@ -10,7 +10,7 @@ import { TopNav } from "./top-nav";
 
 interface Ctx {
   slug: string;
-  me: Member;
+  me: Me;
 }
 const WorkspaceCtx = createContext<Ctx | null>(null);
 
@@ -32,6 +32,12 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
     if (unauthenticated) router.replace(`/login?next=${encodeURIComponent(pathname)}`);
   }, [unauthenticated, router, pathname]);
 
+  // The URL slug must be the viewer's workspace; otherwise move to theirs (keeps the rest of the path).
+  const mySlug = me.data?.workspaceSlug;
+  useEffect(() => {
+    if (mySlug && mySlug !== slug) router.replace(pathname.replace(`/w/${slug}`, `/w/${mySlug}`));
+  }, [mySlug, slug, router, pathname]);
+
   if (me.isError && !unauthenticated) {
     return (
       <main className="mx-auto max-w-xl p-8">
@@ -44,7 +50,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
       </main>
     );
   }
-  if (!me.data) {
+  if (!me.data || me.data.workspaceSlug !== slug) {
     return (
       <main className="mx-auto max-w-6xl p-6">
         <PageSkeleton label="Đang mở văn phòng…" />

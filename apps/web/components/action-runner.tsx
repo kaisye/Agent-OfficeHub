@@ -31,7 +31,14 @@ const SUCCESS = (a: RequestAction, other: string) =>
  * Runs request actions through the API with a confirm step for sending actions.
  * Returns the handler (matches RequestCard.onAction) and the confirm dialog to render.
  */
-export function useActionRunner(slug: string, members: Member[], meId: string, onDone?: (action: RequestAction, r: Request) => void) {
+export function useActionRunner(
+  slug: string,
+  members: Member[],
+  meId: string,
+  onDone?: (action: RequestAction, r: Request) => void,
+  /** Called when the server rejects an action that carried typed text, so the screen can keep that text. */
+  onFail?: (failed: { action: RequestAction; request: Request; body: string }, error: unknown) => void,
+) {
   const act = useActOnRequest(slug);
   const toast = useToast();
   const [pending, setPending] = useState<Pending | null>(null);
@@ -50,6 +57,7 @@ export function useActionRunner(slug: string, members: Member[], meId: string, o
         },
         onError: (e) => {
           toast(errorMessage(e, { otherName: other }), "danger");
+          if (p.body !== undefined) onFail?.({ action: p.action, request: p.request, body: p.body }, e);
           setPending(null);
         },
       },

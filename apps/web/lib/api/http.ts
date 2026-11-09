@@ -1,4 +1,4 @@
-import { ApiErrorCode, Routes, type Id } from "@officehub/shared";
+import { ApiErrorCode, ChangeMessage, Routes, type Id } from "@officehub/shared";
 import { ApiClientError, type ApiClient, type ChangeEvent } from "./types";
 
 type RouteDef = { method: string; path: string };
@@ -56,6 +56,7 @@ export function createHttpClient(opts: HttpClientOptions): ApiClient {
   return {
     mode: "http",
     me: () => call(Routes.me),
+    devMembers: () => call(Routes.devMembers),
     devLogin: async (memberId) => void (await call(Routes.devLogin, {}, { memberId })),
     githubLoginUrl: () => base + Routes.githubLogin.path,
     logout: async () => void (await call(Routes.logout)),
@@ -65,6 +66,7 @@ export function createHttpClient(opts: HttpClientOptions): ApiClient {
     listRequests: (slug) => call(Routes.listRequests, w(slug)),
     createRequest: (slug, input) => call(Routes.createRequest, w(slug), input),
     actOnRequest: (slug, id, input) => call(Routes.actOnRequest, w(slug, { id }), input),
+    getRequest: (slug, id) => call(Routes.getRequest, w(slug, { id })),
     inbox: (slug) => call(Routes.inbox, w(slug)),
     markRead: async (slug, id) => void (await call(Routes.markRead, w(slug, { id }))),
     listDecisions: (slug) => call(Routes.listDecisions, w(slug)),
@@ -78,12 +80,15 @@ export function createHttpClient(opts: HttpClientOptions): ApiClient {
       if (!ES) return () => {};
       const es = new ES(base + fill(Routes.stream.path, { slug }), { withCredentials: true });
       es.addEventListener("change", (ev) => {
-        try {
-          const d = JSON.parse((ev as MessageEvent<string>).data) as { kind?: string; id?: string | null };
-          onChange({ kind: d.kind ?? "unknown", id: d.id ?? null } satisfies ChangeEvent);
-        } catch {
-          onChange({ kind: "unknown", id: null });
-        }
+        const parsed = (() => {
+          try {
+            return ChangeMessage.safeParse(JSON.parse((ev as MessageEvent<string>).data));
+          } catch {
+            return null;
+          }
+        })();
+        // Unknown/malformed message: refresh everything rather than miss an update.
+        onChange(parsed?.success ? { kind: parsed.data.kind, id: parsed.data.id } : ({ kind: "all", id: null } satisfies ChangeEvent));
       });
       return () => es.close();
     },

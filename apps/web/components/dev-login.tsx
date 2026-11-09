@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { DEFAULT_SLUG, SHOW_DEV_LOGIN, getApi } from "@/lib/api";
+import { SHOW_DEV_LOGIN, getApi } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
 import { safeNext } from "@/lib/nav";
 
@@ -12,7 +12,7 @@ export function DevLogin() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const member = params.get("member");
-  const next = safeNext(params.get("next"), `/w/${DEFAULT_SLUG}`);
+  const next = safeNext(params.get("next"), "/");
 
   useEffect(() => {
     if (!SHOW_DEV_LOGIN) return setError("Đăng nhập nhanh đã tắt.");

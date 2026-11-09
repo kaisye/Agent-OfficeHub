@@ -1,7 +1,6 @@
-import { redirect } from "next/navigation";
-import { DEFAULT_SLUG } from "@/lib/api";
+import { Home } from "@/components/home";
 
-// The workspace shell sends signed-out visitors to /login.
-export default function Home() {
-  redirect(`/w/${DEFAULT_SLUG}`);
+// Signed-in visitors go to their own workspace (slug from /me); signed-out visitors to /login.
+export default function Page() {
+  return <Home />;
 }
