@@ -57,14 +57,14 @@ describe("agent tokens", () => {
 describe("rate limiter", () => {
   it("allows capacity then blocks, refills over time", () => {
     let now = 0;
-    const l = new AgentRateLimiter({ perMinute: 3, draftsPerMinute: 1, now: () => now });
+    const l = new AgentRateLimiter({ perMinute: 3, draftsPerHour: 1, statusPerMinute: 1, now: () => now });
     expect([l.check("a"), l.check("a"), l.check("a")]).toEqual([0, 0, 0]);
     expect(l.check("a")).toBeGreaterThan(0);
     expect(l.check("b")).toBe(0); // per-agent
     now += 60000;
     expect(l.check("a")).toBe(0);
-    expect(l.check("a", true)).toBe(0);
-    expect(l.check("a", true)).toBeGreaterThan(0); // draft bucket (1/min)
+    expect(l.check("a", "draft")).toBe(0);
+    expect(l.check("a", "draft")).toBeGreaterThan(0); // draft bucket (1/min)
   });
 });
 

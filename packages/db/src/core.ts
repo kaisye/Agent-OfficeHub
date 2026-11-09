@@ -13,7 +13,7 @@ export const principalMemberId = (p: Principal) => (p.kind === "human" ? p.membe
 
 export function requireScope(p: Principal, scope: AgentScope): void {
   if (p.kind === "agent" && !p.scopes.includes(scope)) {
-    throw new HubError("scope_missing", `Agent token lacks scope ${scope}`, 403);
+    throw new HubError("insufficient_scope", `Agent token lacks scope ${scope}`, 403);
   }
 }
 export function requireHuman(p: Principal, what: string): asserts p is Extract<Principal, { kind: "human" }> {
@@ -94,6 +94,8 @@ export interface AuditEntry {
   outcome?: string;
   /** structural metadata only — never message bodies or rejected content */
   meta?: Record<string, unknown>;
+  /** channel; defaults from the actor (human=web, agent=mcp, webhook, system) */
+  via?: "web" | "api" | "mcp" | "webhook" | "system";
 }
 export type AuditActor =
   | { kind: "human"; memberId: string }
@@ -106,9 +108,10 @@ export function actorOf(p: Principal): AuditActor {
 
 /** Rule 7: append-only audit row (inside an existing workspace transaction). */
 export async function audit(tx: Tx, workspaceId: string, actor: AuditActor, e: AuditEntry): Promise<void> {
-  await tx`INSERT INTO audit_log (workspace_id, actor_kind, member_id, agent_id, action, target_kind, target_id, outcome, meta)
+  await tx`INSERT INTO audit_log (workspace_id, actor_kind, member_id, agent_id, action, target_kind, target_id, outcome, meta, via)
     VALUES (${workspaceId}, ${actor.kind}, ${"memberId" in actor ? actor.memberId : null}, ${"agentId" in actor ? actor.agentId : null},
-            ${e.action}, ${e.targetKind ?? null}, ${e.targetId ?? null}, ${e.outcome ?? "ok"}, ${tx.json((e.meta ?? {}) as never)})`;
+            ${e.action}, ${e.targetKind ?? null}, ${e.targetId ?? null}, ${e.outcome ?? "ok"}, ${tx.json((e.meta ?? {}) as never)},
+            ${e.via ?? (actor.kind === "human" ? "web" : actor.kind === "agent" ? "mcp" : actor.kind)})`;
 }
 
 /** Audit in its own transaction (reads, rejections, secret hits — where there is no domain tx). */

@@ -86,7 +86,7 @@ describe("request flow via services", () => {
     const d = await createRequestDraft(w.human("alice"), { receiverId: w.bob, title: "T", body: "b", taskId: null, dueAt: null });
     await actOnRequest(w.human("alice"), d.id, "send");
     expect((await listInbox(w.human("bob"), { unreadOnly: true })).length).toBe(1);
-    await listInbox(w.human("bob"), { markSeen: true });
+    await listInbox(w.human("bob"), { markRead: true });
     expect((await listInbox(w.human("bob"), { unreadOnly: true })).length).toBe(0);
   });
 

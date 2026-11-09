@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { Agent, Decision, HubEvent, Member, Request, StatusCard, Task, Workspace } from "@officehub/shared";
+import { Agent, Decision, HubEvent, Mascot, Member, Request, StatusCard, Task, Workspace } from "@officehub/shared";
 import { adminSql } from "./client.js";
 import { generateAgentToken } from "./tokens.js";
 
@@ -34,7 +34,7 @@ const ago = (min: number) => new Date(Date.now() - min * 60000).toISOString();
 
 function builtinSeed(): Seed {
   const ws = randomUUID();
-  const mk = (displayName: string, login: string | null, role: "admin" | "member", areas: string[], species: string, palette: string, accessory: string | null, seed: number) => ({
+  const mk = (displayName: string, login: string | null, role: "admin" | "member", areas: string[], species: Mascot["species"], palette: Mascot["palette"], accessory: Mascot["accessory"], seed: number) => ({
     id: randomUUID(),
     workspaceId: ws,
     displayName,

@@ -62,14 +62,14 @@ async function parseBody<S extends z.ZodTypeAny>(c: Context, schema: S): Promise
   try {
     json = await c.req.json();
   } catch {
-    throw new HubError("invalid_json", "Body must be valid JSON", 400);
+    throw new HubError("validation_failed", "Body must be valid JSON", 400);
   }
   const r = schema.safeParse(json);
   if (!r.success) throw invalid(r.error);
   return r.data;
 }
 const invalid = (e: ZodError) =>
-  new HubError("invalid_input", e.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; "), 400);
+  new HubError("validation_failed", e.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; "), 400);
 const uuidParam = (c: Context, name: string) => {
   const r = Id.safeParse(c.req.param(name));
   if (!r.success) throw new HubError("not_found", "Not found", 404);
@@ -93,7 +93,7 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
       allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     }),
   );
-  app.use("*", bodyLimit({ maxSize: 512 * 1024, onError: (c) => c.json({ error: { code: "payload_too_large", message: "Body too large" } }, 413) }));
+  app.use("*", bodyLimit({ maxSize: 512 * 1024, onError: (c) => c.json({ error: { code: "validation_failed", message: "Body too large" } }, 400) }));
 
   app.onError((err, c) => {
     if (err instanceof HubError) {
@@ -138,9 +138,9 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
   app.use("*", async (c, next) => {
     const m = c.req.method;
     if (m === "GET" || m === "HEAD" || m === "OPTIONS" || isAgentPath(c.req.path) || isHookPath(c.req.path)) return next();
-    if (c.req.header(CSRF_HEADER) !== "1") throw new HubError("csrf", `Missing ${CSRF_HEADER}: 1 header`, 403);
+    if (c.req.header(CSRF_HEADER) !== "1") throw new HubError("csrf_failed", `Missing ${CSRF_HEADER}: 1 header`, 403);
     const origin = c.req.header("origin");
-    if (origin && origin !== config.webOrigin) throw new HubError("csrf", "Origin not allowed", 403);
+    if (origin && origin !== config.webOrigin) throw new HubError("csrf_failed", "Origin not allowed", 403);
     return next();
   });
 
@@ -164,14 +164,14 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
     if (!config.devLoginEnabled) throw new HubError("not_found", "Not found", 404);
     const { memberId } = await parseBody(c, Routes.devLogin.body);
     const m = await memberById(memberId);
-    if (!m) throw new HubError("unknown_member", "No such member", 404);
+    if (!m) throw new HubError("not_found", "No such member", 404);
     await startSession(c, m.workspaceId, m.id);
     await auditStandalone(m.workspaceId, { kind: "human", memberId: m.id }, { action: "auth.dev_login" });
     return c.json(await meBody({ kind: "human", workspaceId: m.workspaceId, memberId: m.id, role: m.role }));
   });
 
   app.get("/auth/github", (c) => {
-    if (!config.githubClientId) throw new HubError("oauth_not_configured", "GitHub OAuth is not configured (GITHUB_CLIENT_ID)", 501);
+    if (!config.githubClientId) throw new HubError("internal", "GitHub OAuth is not configured (GITHUB_CLIENT_ID)", 500);
     const state = crypto.randomUUID();
     setCookie(c, "oh_oauth_state", `${state}.${sign(config.sessionSecret, state)}`, { httpOnly: true, sameSite: "Lax", secure: secureCookie, path: "/auth", maxAge: 600 });
     const u = new URL("https://github.com/login/oauth/authorize");
@@ -182,7 +182,7 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
   });
 
   app.get("/auth/github/callback", async (c) => {
-    if (!config.githubClientId) throw new HubError("oauth_not_configured", "GitHub OAuth is not configured", 501);
+    if (!config.githubClientId) throw new HubError("internal", "GitHub OAuth is not configured", 500);
     const [state, mac] = (getCookie(c, "oh_oauth_state") ?? "").split(".");
     const given = c.req.query("state");
     const code = c.req.query("code");
@@ -190,7 +190,7 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
       state && mac && given === state && mac.length === sign(config.sessionSecret, state).length &&
       timingSafeEqual(Buffer.from(mac), Buffer.from(sign(config.sessionSecret, state)));
     deleteCookie(c, "oh_oauth_state", { path: "/auth" });
-    if (!ok || !code) throw new HubError("oauth_state", "Invalid OAuth state", 400);
+    if (!ok || !code) throw new HubError("validation_failed", "Invalid OAuth state", 400);
     const tok = (await (
       await fetch("https://github.com/login/oauth/access_token", {
         method: "POST",
@@ -198,9 +198,9 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
         body: JSON.stringify({ client_id: config.githubClientId, client_secret: config.githubClientSecret, code }),
       })
     ).json()) as { access_token?: string };
-    if (!tok.access_token) throw new HubError("oauth_exchange", "GitHub rejected the code", 400);
+    if (!tok.access_token) throw new HubError("validation_failed", "GitHub rejected the code", 400);
     const gh = (await (await fetch("https://api.github.com/user", { headers: { authorization: `Bearer ${tok.access_token}`, "user-agent": "office-hub" } })).json()) as { login?: string };
-    if (!gh.login) throw new HubError("oauth_exchange", "Could not read GitHub user", 400);
+    if (!gh.login) throw new HubError("validation_failed", "Could not read GitHub user", 400);
     const members = await membersByGithub(gh.login);
     const m = members[0];
     if (!m) return c.redirect(`${config.webOrigin}/login?error=not_a_member`, 302);
@@ -320,12 +320,12 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
   /* ---------------- /agent/* (bearer agent token ONLY) ---------------- */
   app.use("/agent/*", async (c, next) => {
     const t = bearer(c.req.header("authorization"));
-    if (!looksLikeAgentToken(t)) throw new HubError("invalid_token", "Bearer agent token required", 401);
+    if (!looksLikeAgentToken(t)) throw new HubError("unauthenticated", "Bearer agent token required", 401);
     const a = await authenticateAgent(t);
     if (!a.ok) {
       if (a.reason === "revoked" && a.workspaceId)
         await auditStandalone(a.workspaceId, { kind: "agent", agentId: a.agentId!, memberId: a.ownerId! }, { action: "auth.rejected", outcome: "token_revoked" }).catch(() => {});
-      throw new HubError(a.reason === "revoked" ? "token_revoked" : "invalid_token", a.reason === "revoked" ? "Token has been revoked" : "Unknown token", 401);
+      throw new HubError(a.reason === "revoked" ? "token_revoked" : "unauthenticated", a.reason === "revoked" ? "Token has been revoked" : "Unknown token", 401);
     }
     const wait = config.limiter.check(a.principal.agentId, false);
     if (wait) {
@@ -348,11 +348,11 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
   app.post("/hooks/github/:workspaceId", async (c) => {
     const wsId = Id.safeParse(c.req.param("workspaceId"));
     if (!wsId.success) throw new HubError("not_found", "Not found", 404);
-    if (!config.githubWebhookSecret) throw new HubError("webhook_not_configured", "GITHUB_WEBHOOK_SECRET is not set", 503);
+    if (!config.githubWebhookSecret) throw new HubError("internal", "GITHUB_WEBHOOK_SECRET is not set", 500);
     const raw = await c.req.text();
     if (!verifyGithubSignature(config.githubWebhookSecret, raw, c.req.header("x-hub-signature-256"))) {
       await auditStandalone(wsId.data, { kind: "webhook" }, { action: "webhook.github", outcome: "bad_signature" }).catch(() => {});
-      throw new HubError("invalid_signature", "Signature mismatch", 401);
+      throw new HubError("bad_signature", "Signature mismatch", 401);
     }
     const event = c.req.header("x-github-event") ?? "";
     if (event === "ping") return c.json({ ok: true, pong: true });
@@ -360,7 +360,7 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
     try {
       payload = JSON.parse(raw);
     } catch {
-      throw new HubError("invalid_json", "Body must be JSON", 400);
+      throw new HubError("validation_failed", "Body must be JSON", 400);
     }
     const exists = await withWorkspace(wsId.data, async (tx) => (await tx`SELECT id FROM workspaces`).length);
     if (!exists) throw new HubError("not_found", "Workspace not found", 404);

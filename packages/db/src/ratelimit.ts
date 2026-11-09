@@ -1,4 +1,7 @@
-/** Rule 8: per-agent token buckets (in-memory, per process). Defaults: 60 req/min, 10 drafts/min. */
+/**
+ * Rule 8: per-agent token buckets (in-memory, per process).
+ * Defaults (Business): 60 req/min total, post_status 6/min, drafts (send_request + reply_draft) 20/hour.
+ */
 export class TokenBucket {
   private buckets = new Map<string, { tokens: number; at: number }>();
   constructor(
@@ -21,25 +24,33 @@ export class TokenBucket {
   }
 }
 
+export type LimitKind = "any" | "status" | "draft";
+
 export interface AgentLimiterOptions {
   perMinute?: number;
-  draftsPerMinute?: number;
+  statusPerMinute?: number;
+  draftsPerHour?: number;
   now?: () => number;
 }
 
 export class AgentRateLimiter {
   private all: TokenBucket;
+  private status: TokenBucket;
   private drafts: TokenBucket;
   constructor(o: AgentLimiterOptions = {}) {
     const pm = o.perMinute ?? Number(process.env.AGENT_RATE_PER_MIN ?? 60);
-    const dm = o.draftsPerMinute ?? Number(process.env.AGENT_DRAFTS_PER_MIN ?? 10);
+    const sm = o.statusPerMinute ?? Number(process.env.AGENT_STATUS_PER_MIN ?? 6);
+    const dh = o.draftsPerHour ?? Number(process.env.AGENT_DRAFTS_PER_HOUR ?? 20);
     this.all = new TokenBucket(pm, pm, o.now);
-    this.drafts = new TokenBucket(dm, dm, o.now);
+    this.status = new TokenBucket(sm, sm, o.now);
+    this.drafts = new TokenBucket(dh, dh / 60, o.now);
   }
   /** @returns 0 when allowed, else retry-after seconds. */
-  check(agentId: string, isDraft = false): number {
+  check(agentId: string, kind: LimitKind = "any"): number {
     const a = this.all.take(agentId);
     if (a) return a;
-    return isDraft ? this.drafts.take(agentId) : 0;
+    if (kind === "status") return this.status.take(agentId);
+    if (kind === "draft") return this.drafts.take(agentId);
+    return 0;
   }
 }

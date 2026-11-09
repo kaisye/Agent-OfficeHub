@@ -28,17 +28,23 @@ export async function getBoard(p: Principal) {
     const members = await tx`SELECT * FROM members ORDER BY created_at, display_name`;
     const cards = await tx`SELECT * FROM status_cards`;
     const tasks = await tx`SELECT * FROM tasks ORDER BY created_at DESC LIMIT 200`;
-    const events = await tx`SELECT * FROM events ORDER BY time DESC, id LIMIT 50`;
+    const events = await tx`SELECT * FROM events ORDER BY time DESC, id LIMIT 150`;
     return { ws, members, cards, tasks, events };
   });
   if (!base.ws) throw notFound("workspace");
+  // C13: request.* events are shown only when the viewer may see the request they refer to.
+  const visible = await listRequests(p);
+  const visibleIds = new Set(visible.map((r) => r.id));
+  const events = base.events
+    .filter((e) => !String(e.type).startsWith("request.") || visibleIds.has(e.data?.requestId))
+    .slice(0, 50);
   return {
     workspace: mapWorkspace(base.ws),
     members: base.members.map(mapMember),
     cards: base.cards.map(mapCard),
     tasks: base.tasks.map(mapTask),
-    recentEvents: base.events.map(mapEvent),
-    openRequests: await listRequests(p, { openOnly: true }),
+    recentEvents: events.map(mapEvent),
+    openRequests: visible.filter((r) => r.status !== "closed" && r.status !== "cancelled"),
   };
 }
 
@@ -57,7 +63,7 @@ export async function updateOwnStatus(p: Principal, input: StatusInput) {
   return withWorkspace(p.workspaceId, async (tx) => {
     if (input.waitingOn.length) {
       const ok = await tx`SELECT id FROM members WHERE id = ANY(${input.waitingOn}::uuid[])`;
-      if (ok.length !== new Set(input.waitingOn).size) throw new HubError("invalid_waiting_on", "waitingOn contains unknown members", 422);
+      if (ok.length !== new Set(input.waitingOn).size) throw new HubError("validation_failed", "waitingOn contains unknown members", 400);
     }
     const [row] = await tx`INSERT INTO status_cards (member_id, workspace_id, presence, doing, branch, waiting_on, updated_by)
       VALUES (${me}, ${p.workspaceId}, ${input.presence}, ${input.doing}, ${input.branch}, ${input.waitingOn}::uuid[], ${p.kind})
@@ -87,9 +93,10 @@ export async function listDecisions(p: Principal) {
 /** Rule: decisions are recorded by HUMANS ONLY. There is no agent path (no MCP tool, 403 on bearer tokens). */
 export async function recordDecision(p: Principal, input: { title: string; body: string; rationale: string; taskId: string | null }) {
   requireHuman(p, "Recording a decision");
+  if (!input.rationale.trim() || !input.title.trim()) throw new HubError("validation_failed", "title and rationale are required", 400);
   await guardSecrets(p, "decision", { title: input.title, body: input.body, rationale: input.rationale });
   return withWorkspace(p.workspaceId, async (tx) => {
-    if (input.taskId && !(await tx`SELECT id FROM tasks WHERE id = ${input.taskId}`)[0]) throw new HubError("invalid_task", "Unknown task", 422);
+    if (input.taskId && !(await tx`SELECT id FROM tasks WHERE id = ${input.taskId}`)[0]) throw new HubError("validation_failed", "Unknown task", 400);
     const [row] = await tx`INSERT INTO decisions (workspace_id, title, body, rationale, decided_by_id, task_id)
       VALUES (${p.workspaceId}, ${input.title}, ${input.body}, ${input.rationale}, ${p.memberId}, ${input.taskId}) RETURNING *`;
     await emitEvent(tx, p, p.workspaceId, "decision.recorded", { decisionId: row!.id }, { taskId: input.taskId });
@@ -101,7 +108,7 @@ export async function recordDecision(p: Principal, input: { title: string; body:
 /* ---------- agents (humans manage their OWN agents) ---------- */
 export async function listMyAgents(p: Principal) {
   requireHuman(p, "Listing agents");
-  return withWorkspace(p.workspaceId, async (tx) => (await tx`SELECT * FROM agents WHERE owner_id = ${p.memberId} ORDER BY created_at DESC`).map(mapAgent));
+  return withWorkspace(p.workspaceId, async (tx) => (await tx`SELECT * FROM agents WHERE (owner_id = ${p.memberId} OR ${p.role === "admin"}) ORDER BY created_at DESC`).map(mapAgent));
 }
 
 export async function createAgent(p: Principal, input: { kind: string; label: string; scopes: AgentScope[] }) {
@@ -121,14 +128,23 @@ export async function createAgent(p: Principal, input: { kind: string; label: st
 export async function revokeAgent(p: Principal, id: string) {
   requireHuman(p, "Revoking an agent");
   await withWorkspace(p.workspaceId, async (tx) => {
-    const rows = await tx`UPDATE agents SET revoked_at = COALESCE(revoked_at, now())
-      WHERE id = ${id} AND (owner_id = ${p.memberId} OR ${p.role === "admin"}) RETURNING id`;
-    if (!rows[0]) throw notFound("agent");
+    const [a] = await tx`SELECT owner_id FROM agents WHERE id = ${id}`;
+    if (!a) throw notFound("agent");
+    if (a.owner_id !== p.memberId && p.role !== "admin") throw new HubError("forbidden", "Only the owner or an admin can revoke this agent", 403);
+    await tx`UPDATE agents SET revoked_at = COALESCE(revoked_at, now()) WHERE id = ${id}`;
     await audit(tx, p.workspaceId, actorOf(p), { action: "agent.revoke", targetKind: "agent", targetId: id });
   });
 }
 
 /* ---------- audit listing ---------- */
+const AUDIT_TARGET: Record<string, string> = {
+  request: "request", request_message: "request", decision: "decision", status: "status", status_card: "status",
+  agent: "agent", task: "task", board: "board", inbox: "inbox", session: "session",
+};
+const AUDIT_OK = new Set(["ok", "duplicate", "ignored"]);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Admin: all entries. Member: own + own agents (audit rows of agents carry the owner's member id). */
 export async function listAudit(p: Principal, limit = 200) {
   requireHuman(p, "Reading the audit log");
   return withWorkspace(p.workspaceId, async (tx) => {
@@ -137,16 +153,17 @@ export async function listAudit(p: Principal, limit = 200) {
         ? await tx`SELECT * FROM audit_log ORDER BY id DESC LIMIT ${limit}`
         : await tx`SELECT * FROM audit_log WHERE member_id = ${p.memberId} ORDER BY id DESC LIMIT ${limit}`;
     return rows.map((r) => ({
-      id: Number(r.id),
+      id: r.public_id as string,
+      workspaceId: r.workspace_id as string,
       at: new Date(r.at).toISOString(),
-      actorKind: r.actor_kind,
-      memberId: r.member_id,
-      agentId: r.agent_id,
-      action: r.action,
-      targetKind: r.target_kind,
-      targetId: r.target_id,
-      outcome: r.outcome,
-      meta: r.meta,
+      actorMemberId: (r.member_id as string | null) ?? null,
+      actorAgentId: (r.agent_id as string | null) ?? null,
+      via: r.via as "web" | "api" | "mcp" | "webhook" | "system",
+      action: r.action as string,
+      targetKind: (AUDIT_TARGET[r.target_kind as string] ?? null) as never,
+      targetId: r.target_id && UUID.test(r.target_id) ? (r.target_id as string) : null,
+      outcome: (AUDIT_OK.has(r.outcome) ? "ok" : r.outcome === "rejected" ? "rejected" : "denied") as "ok" | "denied" | "rejected",
+      detail: r.meta as Record<string, unknown>,
     }));
   });
 }
