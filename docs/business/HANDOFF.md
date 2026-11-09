@@ -31,7 +31,7 @@ Chạy kiểm tra seed (từ gốc repo, sau `pnpm install`):
 | A10 | Rate limit số liệu là đề xuất (agent 60/phút, `post_status` 6/phút, nháp 20/giờ, tối đa 10 mở; người 120/phút, `createRequest` 30/giờ) | AGT-09, AUD-07 |
 | A11 | Secret bị chặn vẫn ghi 1 dòng audit metadata (loại, actor, route), không nội dung, không băm | AUD-01 |
 | A12 | Gói bàn giao: yêu cầu `closed` cho mọi thành viên; yêu cầu mở chỉ tiêu đề + trạng thái nếu người xem không phải một bên | HOF-02 |
-| A13 | Seed: Minh, Lan, Huy, Ngọc và mọi `githubLogin` là placeholder; `tokenPrefix` giả | seed |
+| A13 | Seed: Dũng, Thành, Duy, Thắng và mọi `githubLogin` là placeholder; `tokenPrefix` giả | seed |
 | A14 | Thông báo pilot chỉ in-app, suy ra từ trạng thái và event | Epic 8 |
 
 ## 3. Contract change requests (`packages/shared`)
@@ -71,7 +71,7 @@ Ghi chú test hiện có: `request.test.ts` mô tả "4 human-only steps (+cance
 | Q7 | Một người có thể có nhiều agent cùng lúc không (Phong dùng cả Claude Code và Codex)? Hợp đồng cho phép; giới hạn mấy? | Cho phép, chưa giới hạn |
 | Q8 | Với tin có secret trong webhook GitHub: từ chối bản ghi (CON-03) có chấp nhận được khi mất sự kiện PR đó? | Từ chối, trả 200, audit |
 | Q9 | Ai được thu hồi agent: chủ và admin; đúng ý chưa? | Chủ và admin |
-| Q10 | Tên và `githubLogin` thật của Minh, Lan, Huy, Ngọc (hiện bịa) | Placeholder |
+| Q10 | Tên và `githubLogin` thật của Dũng, Thành, Duy, Thắng (hiện bịa) | Placeholder |
 | Q11 | Có cần nhãn "Cùng sửa deploy/" (BRD-06) trong pilot không, vì đây là nỗi đau số 6? Hiện P1 | P1 |
 
 ## 5. Lưu ý cho QA

@@ -95,7 +95,7 @@ Là dev, tôi muốn thấy khi 2 Việc đang mở cùng đụng một khu vự
 
 ### BRD-07 · P1 · Lọc theo area
 Là người mới, tôi muốn lọc thẻ/Việc theo area (`feed`, `deploy`...), để tìm người phụ trách.
-- Given Member có `areas` / When chọn area "deploy" / Then chỉ hiện Phong và Minh (seed) và Việc của họ.
+- Given Member có `areas` / When chọn area "deploy" / Then chỉ hiện Phong và Dũng (seed) và Việc của họ.
 
 ### BRD-08 · P2 · Lịch sử presence
 Là admin, tôi muốn xem presence theo giờ trong ngày, để hiểu nhịp làm việc của nhóm (không dùng để chấm điểm).

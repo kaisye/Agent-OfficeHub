@@ -93,7 +93,7 @@ export function MascotStudio() {
             <h2 id="moods-h" className="mb-1 text-oh-lg font-semibold">
               6 tâm trạng, xem trực tiếp
             </h2>
-            <p className="mb-3 text-oh-xs text-oh-ink-muted">Tâm trạng đi theo trạng thái. Huy hiệu và chữ luôn đi cùng nhau, không chỉ dùng màu.</p>
+            <p className="mb-3 text-oh-xs text-oh-ink-muted">Tâm trạng đi theo trạng thái. Duy hiệu và chữ luôn đi cùng nhau, không chỉ dùng màu.</p>
             <div role="radiogroup" aria-labelledby="moods-h" className="grid grid-cols-3 gap-2 sm:grid-cols-6">
               {MOODS.map((m) => (
                 <button

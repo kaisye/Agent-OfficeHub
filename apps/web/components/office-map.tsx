@@ -133,7 +133,7 @@ export function OfficeMap({ board, meId, onOpen }: { board: Board; meId: string;
       </div>
       <div className="flex items-center gap-1.5 px-5 py-3 text-oh-xs text-oh-ink-muted">
         <Icon name="leaf" size={13} />
-        Một chỗ ấm áp để làm việc cùng nhau. Huy hiệu nhỏ trên mỗi buddy là tâm trạng theo trạng thái.
+        Một chỗ ấm áp để làm việc cùng nhau. Duy hiệu nhỏ trên mỗi buddy là tâm trạng theo trạng thái.
       </div>
     </section>
   );

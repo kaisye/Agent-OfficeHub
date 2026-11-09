@@ -27,10 +27,10 @@ describe("Mascot (Desk Buddies)", () => {
 describe("requestDirectionLabel", () => {
   const base = { askerId: "A", receiverId: "B", messages: [] as never[] };
   it("is viewer-aware", () => {
-    expect(requestDirectionLabel({ ...base, status: "sent" }, "A", "Trang", "Minh")).toBe("Bạn hỏi Minh");
-    expect(requestDirectionLabel({ ...base, status: "sent" }, "B", "Trang", "Minh")).toBe("Trang hỏi bạn");
-    expect(requestDirectionLabel({ ...base, status: "sent" }, "C", "Trang", "Minh")).toBe("Trang hỏi Minh");
+    expect(requestDirectionLabel({ ...base, status: "sent" }, "A", "Trang", "Dũng")).toBe("Bạn hỏi Dũng");
+    expect(requestDirectionLabel({ ...base, status: "sent" }, "B", "Trang", "Dũng")).toBe("Trang hỏi bạn");
+    expect(requestDirectionLabel({ ...base, status: "sent" }, "C", "Trang", "Dũng")).toBe("Trang hỏi Dũng");
     const draft = { ...base, status: "draft" as const, messages: [{ sentById: null, authoredBy: "agent" }] as never[] };
-    expect(requestDirectionLabel(draft, "A", "Trang", "Minh")).toBe("Nháp agent của bạn · gửi Minh");
+    expect(requestDirectionLabel(draft, "A", "Trang", "Dũng")).toBe("Nháp agent của bạn · gửi Dũng");
   });
 });

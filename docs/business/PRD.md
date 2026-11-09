@@ -22,7 +22,7 @@ Nhóm phần mềm có người dùng agent lập trình (Claude Code, Codex, Ge
 | **P1 — Dev dùng agent nhiều** (Phong) | Chạy Claude Code cả ngày, nhiều nhánh | Để agent đọc bảng, soạn nháp yêu cầu/trả lời; mình chỉ duyệt và bấm gửi | Copy chat ↔ agent; dán nhầm lệnh | Web + MCP (token riêng) + hook SessionStart/UserPromptSubmit |
 | **P2 — Dev không dùng agent** (Trang) | Làm việc bằng IDE + chat | Hỏi/đáp, xem trạng thái, ghi quyết định, không cần cài gì | Phải hỏi "PR số mấy"; sợ bị bỏ ngoài luồng agent | Chỉ web, đủ mọi chức năng người |
 | **P3 — Trưởng nhóm / Admin** (Phong, vai `admin`) | Quản workspace, kết nối GitHub, quản agent | Thấy việc đứng ở đâu, thu hồi token, xem nhật ký | Không biết ai chờ ai; lo agent làm bậy | Web: bảng, audit, quản agent |
-| **P4 — Người mới giữa sprint** (vd. Ngọc) | Vào nhóm đang chạy, thiếu ngữ cảnh | Hiểu Việc đang làm, vì sao chọn cách này, ai phụ trách | Phải hỏi từng người | Bảng, sổ quyết định, gói bàn giao |
+| **P4 — Người mới giữa sprint** (vd. Thắng) | Vào nhóm đang chạy, thiếu ngữ cảnh | Hiểu Việc đang làm, vì sao chọn cách này, ai phụ trách | Phải hỏi từng người | Bảng, sổ quyết định, gói bàn giao |
 
 Người dùng gián tiếp: agent (không phải persona; là công cụ của chủ, không có quyền quyết định).
 

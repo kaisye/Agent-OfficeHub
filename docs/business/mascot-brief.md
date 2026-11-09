@@ -39,11 +39,11 @@ Nguyên tắc: agent không phải một thành viên. Agent là công cụ củ
 | Nội dung do agent soạn (`authoredBy="agent"`) | Mascot của chủ + **huy hiệu bot nhỏ** ở góc, kèm chữ "Agent soạn" |
 | Nháp agent chưa duyệt (`sentById=null`) | Như trên + chữ "Nháp"; kiểu hiển thị khác hẳn tin đã gửi (viền nét đứt hoặc tương đương, không chỉ đổi màu) |
 | Nháp agent đã được chủ gửi | Giữ huy hiệu bot + thêm "đã duyệt bởi {tên}" |
-| Nháp agent chủ đã sửa (`editedBeforeSend=true`) | Huy hiệu bot + "Đã chỉnh sửa" |
+| Nháp agent chủ đã sửa (`editedBeforeSend=true`) | Duy hiệu bot + "Đã chỉnh sửa" |
 | Thẻ trạng thái do agent cập nhật (`updatedBy="agent"`) | Mascot của chủ + huy hiệu bot nhỏ; mood vẫn theo `presence` |
 | Agent đã thu hồi | Nội dung cũ giữ huy hiệu bot (lịch sử), thêm "token đã thu hồi" khi xem chi tiết |
 
-Huy hiệu bot: một biểu tượng duy nhất cho mọi loại agent (Claude Code, Codex, Gemini CLI, other); loại agent hiển thị bằng chữ khi di chuột hoặc ở chi tiết, không bằng huy hiệu khác nhau. Huy hiệu phải nhìn thấy được ở 24 px và không trùng với species `bot` (một người có thể chọn loài "bot"; phân biệt bằng hình dạng huy hiệu và nhãn chữ).
+Duy hiệu bot: một biểu tượng duy nhất cho mọi loại agent (Claude Code, Codex, Gemini CLI, other); loại agent hiển thị bằng chữ khi di chuột hoặc ở chi tiết, không bằng huy hiệu khác nhau. Duy hiệu phải nhìn thấy được ở 24 px và không trùng với species `bot` (một người có thể chọn loài "bot"; phân biệt bằng hình dạng huy hiệu và nhãn chữ).
 
 ## 4. Điều không bao giờ được xảy ra
 
@@ -74,7 +74,7 @@ Huy hiệu bot: một biểu tượng duy nhất cho mọi loại agent (Claude 
 | Hạng mục | Mô tả |
 |---|---|
 | Bộ mascot | 6 species × 7 palette × accessory × 6 mood (có thể tham số hoá) |
-| Huy hiệu bot | 1 bộ, 24/16 px |
+| Duy hiệu bot | 1 bộ, 24/16 px |
 | Trạng thái nháp | Kiểu hiển thị riêng cho tin nháp, đã gửi, đã sửa |
 | Trang thử | Một trang liệt kê 7 người trong `seed-tripflix.json` ở đủ 6 mood, với và không có huy hiệu bot |
 | Quy tắc dùng | Tài liệu ngắn: cỡ, khoảng cách, cách đặt nhãn chữ |

@@ -46,10 +46,10 @@ function builtinSeed(): Seed {
   const phong = mk("Phong", "phong-tripflix", "admin", ["deploy", "backend"], "blu");
   const trang = mk("Trang", "trang-tripflix", "member", ["feed", "mobile"], "pip");
   const bao = mk("Bảo", "bao-tripflix", "member", ["ai", "backend"], "sage");
-  const minh = mk("Minh", "minh-tripflix", "member", ["web"], "mocha");
-  const lan = mk("Lan", "lan-tripflix", "member", ["design"], "fern");
-  const huy = mk("Huy", "huy-tripflix", "member", ["qa"], "milo");
-  const ngoc = mk("Ngọc", "ngoc-tripflix", "member", ["data"], "milo");
+  const minh = mk("Dũng", "minh-tripflix", "member", ["web"], "mocha");
+  const lan = mk("Thành", "lan-tripflix", "member", ["design"], "fern");
+  const huy = mk("Duy", "huy-tripflix", "member", ["qa"], "milo");
+  const ngoc = mk("Thắng", "ngoc-tripflix", "member", ["data"], "milo");
   const members = [phong, trang, bao, minh, lan, huy, ngoc];
   const card = (m: { id: string }, presence: StatusCard["presence"], doing: string | null, branch: string | null, waitingOn: string[] = []) => ({
     memberId: m.id,

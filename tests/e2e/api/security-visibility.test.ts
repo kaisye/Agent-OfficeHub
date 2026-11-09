@@ -1,5 +1,5 @@
 /**
- * C13 visibility. Bảo (asker) <-> Trang (receiver) are the parties; Minh is a non-admin outsider; Phong is an admin outsider.
+ * C13 visibility. Bảo (asker) <-> Trang (receiver) are the parties; Dũng is a non-admin outsider; Phong is an admin outsider.
  * Marker strings let us grep every surface for leaked text.
  */
 import { beforeAll, describe, expect, it } from "vitest";

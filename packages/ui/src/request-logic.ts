@@ -60,7 +60,7 @@ export function availableActions(request: Pick<Request, "status" | "askerId" | "
 }
 
 /**
- * Direction-aware heading for a request ("Nháp agent của bạn · gửi Minh", "Minh hỏi bạn", "Bạn hỏi Minh").
+ * Direction-aware heading for a request ("Nháp agent của bạn · gửi Dũng", "Dũng hỏi bạn", "Bạn hỏi Dũng").
  * Unsent drafts are visible only to their owner (canSeeMessage), so the draft wording is only used for that side.
  */
 export function requestDirectionLabel(

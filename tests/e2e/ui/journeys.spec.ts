@@ -8,7 +8,7 @@ test("UI-1 dev login -> board shows all 7 members with mascots (BRD-01)", async 
   const { ctx, page } = await loginAs(browser, MEMBER.phong);
   await expect(page).toHaveURL(new RegExp(`/w/${SLUG}`));
   const floor = page.locator('section[aria-labelledby="floor-h"]');
-  for (const name of ["Phong", "Minh", "Bảo", "Ngọc", "Trang", "Lan", "Huy"]) await expect(floor.getByText(name, { exact: true }).first()).toBeVisible();
+  for (const name of ["Phong", "Dũng", "Bảo", "Thắng", "Trang", "Thành", "Duy"]) await expect(floor.getByText(name, { exact: true }).first()).toBeVisible();
   // one mascot svg per member card (+ small ones elsewhere)
   expect(await floor.locator("svg").count()).toBeGreaterThanOrEqual(7);
   // every presence pill is a word, not colour only

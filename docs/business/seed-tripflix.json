@@ -1,5 +1,5 @@
 {
-  "_note": "Dữ liệu mẫu cho dev/demo. Phong, Trang, Bảo là tên thật từ đề xuất; Minh, Lan, Huy, Ngọc và các githubLogin là PLACEHOLDER bịa. tokenPrefix là giá trị giả, không phải token thật. Mọi UUID cố định (v4), giờ +07:00 quanh 2026-11-09. Request 'env' (sent) đã quá hạn so với 09:00 ngày 09/11 để demo nhắc quá hạn. Event request.* có data.requestId, decision.recorded có data.decisionId.",
+  "_note": "Dữ liệu mẫu cho dev/demo. Tên 7 thành viên là tên thật của nhóm Tripflix; các githubLogin dạng *-placeholder vẫn là giá trị giả. tokenPrefix là giá trị giả, không phải token thật. Mọi UUID cố định (v4), giờ +07:00 quanh 2026-11-09. Request 'env' (sent) đã quá hạn so với 09:00 ngày 09/11 để demo nhắc quá hạn. Event request.* có data.requestId, decision.recorded có data.decisionId.",
   "workspace": {
     "id": "d515b602-a2be-4f07-935b-21114ae80a69",
     "name": "Tripflix",
@@ -58,8 +58,8 @@
     {
       "id": "3c343b90-4f1b-4be5-a283-34c921c55092",
       "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
-      "displayName": "Minh",
-      "githubLogin": "minh-placeholder",
+      "displayName": "Dũng",
+      "githubLogin": "dung-placeholder",
       "role": "member",
       "areas": [
         "mobile",
@@ -72,8 +72,8 @@
     {
       "id": "ed5375c3-a3b1-400c-a0c3-70593a3824e6",
       "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
-      "displayName": "Lan",
-      "githubLogin": "lan-placeholder",
+      "displayName": "Thành",
+      "githubLogin": "thanh-placeholder",
       "role": "member",
       "areas": [
         "design",
@@ -86,8 +86,8 @@
     {
       "id": "7fe8eadd-e822-4278-9780-44a6351c2d8c",
       "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
-      "displayName": "Huy",
-      "githubLogin": "huy-placeholder",
+      "displayName": "Duy",
+      "githubLogin": "duy-placeholder",
       "role": "member",
       "areas": [
         "qa"
@@ -99,8 +99,8 @@
     {
       "id": "c1c9656e-44f4-493b-b124-69c75f53a565",
       "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
-      "displayName": "Ngọc",
-      "githubLogin": "ngoc-placeholder",
+      "displayName": "Thắng",
+      "githubLogin": "thang-placeholder",
       "role": "member",
       "areas": [
         "data",
@@ -656,7 +656,7 @@
           "id": "323b8e6b-9e1a-4be3-926d-66dc62561164",
           "requestId": "e2e3ae4a-1050-4a09-89cc-f9d686fbc7ba",
           "kind": "ask",
-          "body": "Hai PR cùng sửa deploy/compose.yml. Đề xuất #219 merge trước, #221 rebase sau. Minh đồng ý không?",
+          "body": "Hai PR cùng sửa deploy/compose.yml. Đề xuất #219 merge trước, #221 rebase sau. Dũng đồng ý không?",
           "authoredBy": "agent",
           "authorAgentId": "6c423dac-94ed-469e-af9a-16d82d324a67",
           "sentById": null,
@@ -681,7 +681,7 @@
           "id": "3c7deab5-79e4-49ef-b3ba-ab88a836a3a8",
           "requestId": "617c49e8-c6c3-498c-ba96-69734f6fd948",
           "kind": "ask",
-          "body": "Huy test giúp skeleton loading trên Safari iOS.",
+          "body": "Duy test giúp skeleton loading trên Safari iOS.",
           "authoredBy": "human",
           "authorAgentId": null,
           "sentById": "ed5375c3-a3b1-400c-a0c3-70593a3824e6",

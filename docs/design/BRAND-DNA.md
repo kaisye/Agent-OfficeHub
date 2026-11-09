@@ -34,7 +34,7 @@ Token ngữ nghĩa `--oh-*` / tiện ích `oh-*` giữ nguyên tên (bg, surface
 Dấu lá (hai chiếc lá Cream trên ô Forest, nghiêng nhẹ, chấm Cognac). Sinh bằng `pnpm --filter @officehub/brand build:icons` ra `icon.svg`, `favicon-32.png`, `apple-touch-icon.png` (180), `icon-512.png`.
 
 ## 6. Giọng điệu
-Tiếng Việt tự nhiên, ngắn, chủ động ("Nháp agent của bạn · gửi Minh", "Minh hỏi bạn"). Mô tả hành động thật của nút, không dọa người dùng.
+Tiếng Việt tự nhiên, ngắn, chủ động ("Nháp agent của bạn · gửi Dũng", "Dũng hỏi bạn"). Mô tả hành động thật của nút, không dọa người dùng.
 
 ## 7. Truy cập
 Trạng thái luôn có chữ + hình (không chỉ màu); icon-button có aria-label; overlay là role=dialog có focus trap, Escape đóng; lỗi form role=alert.
