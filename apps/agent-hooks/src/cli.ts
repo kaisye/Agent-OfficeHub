@@ -1,12 +1,12 @@
-#!/usr/bin/env -S npx tsx
+#!/usr/bin/env node
 /**
  * officehub-hook — Claude Code hook helper.
- *   officehub-hook [SessionStart|UserPromptSubmit]
+ *   officehub-hook [session-start|user-prompt-submit]   (also accepts SessionStart / UserPromptSubmit)
  * Reads the hook JSON from stdin (to learn hook_event_name), calls GET {OFFICEHUB_API_URL}/agent/inbox?unread=1&mark=1
  * with OFFICEHUB_AGENT_TOKEN, and prints unread inbox items (wrapped as untrusted) as additionalContext.
  * It NEVER blocks the session: every failure exits 0 with a note on stderr.
  */
-import { buildHookOutput, isHookEvent, type HookEvent, type WrappedInbox } from "./format.js";
+import { buildHookOutput, parseHookEvent, type HookEvent, type WrappedInbox } from "./format.js";
 
 async function readStdin(): Promise<string> {
   if (process.stdin.isTTY) return "";
@@ -21,11 +21,11 @@ async function main(): Promise<void> {
     console.error("officehub-hook: OFFICEHUB_AGENT_TOKEN not set; skipping");
     return;
   }
-  let event: HookEvent | undefined = isHookEvent(process.argv[2]) ? process.argv[2] : undefined;
+  let event: HookEvent | undefined = parseHookEvent(process.argv[2]);
   if (!event) {
     try {
       const j = JSON.parse((await readStdin()) || "{}");
-      if (isHookEvent(j.hook_event_name)) event = j.hook_event_name;
+      event = parseHookEvent(j.hook_event_name);
     } catch {
       /* ignore */
     }

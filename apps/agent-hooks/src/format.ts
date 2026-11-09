@@ -11,6 +11,13 @@ export function isHookEvent(s: unknown): s is HookEvent {
   return s === "SessionStart" || s === "UserPromptSubmit";
 }
 
+/** Accepts the Claude Code event names and kebab-case aliases (session-start, user-prompt-submit). */
+export function parseHookEvent(s: unknown): HookEvent | undefined {
+  if (typeof s !== "string") return undefined;
+  const k = s.replace(/[-_ ]/g, "").toLowerCase();
+  return k === "sessionstart" ? "SessionStart" : k === "userpromptsubmit" ? "UserPromptSubmit" : undefined;
+}
+
 /**
  * Returns the stdout JSON for Claude Code (hookSpecificOutput.additionalContext), or null when there is nothing to say.
  * The inbox items stay JSON-encoded inside a fenced block, so text written by others cannot break out of the data section.

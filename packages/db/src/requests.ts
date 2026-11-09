@@ -125,11 +125,13 @@ async function markSeen(tx: Tx, workspaceId: string, memberId: string, requestId
 }
 
 /** All requests the principal may see (C13), newest first. */
-export async function listRequests(p: Principal, opts: { openOnly?: boolean } = {}): Promise<RequestView[]> {
+export async function listRequests(p: Principal, opts: { openOnly?: boolean; taskId?: string } = {}): Promise<RequestView[]> {
   requireScope(p, "board:read");
   const viewer = viewerOf(p);
   return withWorkspace(p.workspaceId, async (tx) => {
-    const rows = opts.openOnly
+    const rows = opts.taskId
+      ? await tx`SELECT * FROM requests WHERE task_id = ${opts.taskId} ORDER BY created_at LIMIT 300`
+      : opts.openOnly
       ? await tx`SELECT * FROM requests WHERE status NOT IN ('closed','cancelled') ORDER BY updated_at DESC LIMIT 300`
       : await tx`SELECT * FROM requests ORDER BY updated_at DESC LIMIT 300`;
     return loadViews(tx, rows, viewer);
@@ -173,6 +175,8 @@ export interface CreateRequestInput {
   dueAt: string | null;
 }
 
+export const MAX_OPEN_DRAFTS_PER_AGENT = 10;
+
 /** Creates a DRAFT only (status 'draft'). Sending is a separate human action. */
 export async function createRequestDraft(p: Principal, input: CreateRequestInput): Promise<RequestView> {
   requireScope(p, "request:draft");
@@ -180,6 +184,18 @@ export async function createRequestDraft(p: Principal, input: CreateRequestInput
   const me = principalMemberId(p);
   if (input.receiverId === me) throw new HubError("validation_failed", "Cannot send a request to yourself", 400);
   return withWorkspace(p.workspaceId, async (tx) => {
+    if (p.kind === "agent") {
+      // Business matrix: at most MAX_OPEN_DRAFTS_PER_AGENT unsent drafts per agent. The advisory lock serializes concurrent creates.
+      await tx`SELECT pg_advisory_xact_lock(hashtextextended(${p.agentId}, 7))`;
+      const [c] = await tx`SELECT count(*)::int AS n FROM requests r WHERE r.status = 'draft' AND EXISTS (
+        SELECT 1 FROM request_messages m WHERE m.request_id = r.id AND m.kind = 'ask' AND m.author_agent_id = ${p.agentId})`;
+      if ((c?.n ?? 0) >= MAX_OPEN_DRAFTS_PER_AGENT)
+        throw new HubError(
+          "rate_limited",
+          `Too many open drafts: this agent already has ${MAX_OPEN_DRAFTS_PER_AGENT} unsent draft requests. Ask your owner to send or cancel some in the Office Hub web app, then try again.`,
+          429,
+        );
+    }
     const rcv = await tx`SELECT id FROM members WHERE id = ${input.receiverId}`;
     if (!rcv[0]) throw new HubError("validation_failed", "Receiver is not a member of this workspace", 400);
     if (input.taskId && !(await tx`SELECT id FROM tasks WHERE id = ${input.taskId}`)[0]) throw new HubError("validation_failed", "Unknown task", 400);

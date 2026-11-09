@@ -127,12 +127,13 @@ export async function createAgent(p: Principal, input: { kind: string; label: st
 
 export async function revokeAgent(p: Principal, id: string) {
   requireHuman(p, "Revoking an agent");
-  await withWorkspace(p.workspaceId, async (tx) => {
+  return withWorkspace(p.workspaceId, async (tx) => {
     const [a] = await tx`SELECT owner_id FROM agents WHERE id = ${id}`;
     if (!a) throw notFound("agent");
     if (a.owner_id !== p.memberId && p.role !== "admin") throw new HubError("forbidden", "Only the owner or an admin can revoke this agent", 403);
-    await tx`UPDATE agents SET revoked_at = COALESCE(revoked_at, now()) WHERE id = ${id}`;
+    const [row] = await tx`UPDATE agents SET revoked_at = COALESCE(revoked_at, now()) WHERE id = ${id} RETURNING *`;
     await audit(tx, p.workspaceId, actorOf(p), { action: "agent.revoke", targetKind: "agent", targetId: id });
+    return mapAgent(row!);
   });
 }
 
@@ -142,7 +143,6 @@ const AUDIT_TARGET: Record<string, string> = {
   agent: "agent", task: "task", board: "board", inbox: "inbox", session: "session",
 };
 const AUDIT_OK = new Set(["ok", "duplicate", "ignored"]);
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Admin: all entries. Member: own + own agents (audit rows of agents carry the owner's member id). */
 export async function listAudit(p: Principal, limit = 200) {
@@ -161,7 +161,7 @@ export async function listAudit(p: Principal, limit = 200) {
       via: r.via as "web" | "api" | "mcp" | "webhook" | "system",
       action: r.action as string,
       targetKind: (AUDIT_TARGET[r.target_kind as string] ?? null) as never,
-      targetId: r.target_id && UUID.test(r.target_id) ? (r.target_id as string) : null,
+      targetId: (r.target_id as string | null) ?? null,
       outcome: (AUDIT_OK.has(r.outcome) ? "ok" : r.outcome === "rejected" ? "rejected" : "denied") as "ok" | "denied" | "rejected",
       detail: r.meta as Record<string, unknown>,
     }));
@@ -171,14 +171,18 @@ export async function listAudit(p: Principal, limit = 200) {
 /* ---------- handoff pack ---------- */
 export async function buildHandoff(p: Principal, taskId: string): Promise<{ markdown: string }> {
   requireHuman(p, "Generating a handoff pack");
-  const me = p.memberId;
+  // C13: only requests the viewer may see (party or admin; never someone else's draft). Same filter as board/list.
+  const visibleReqs = await listRequests(p, { taskId });
+  const visibleIds = new Set(visibleReqs.map((r) => r.id));
   return withWorkspace(p.workspaceId, async (tx) => {
     const [task] = await tx`SELECT * FROM tasks WHERE id = ${taskId}`;
     if (!task) throw notFound("task");
     const name = new Map((await tx`SELECT id, display_name FROM members`).map((m) => [m.id as string, m.display_name as string]));
     const who = (id: string | null) => (id ? (name.get(id) ?? "?") : "—");
-    const events = await tx`SELECT * FROM events WHERE task_id = ${taskId} ORDER BY time ASC LIMIT 200`;
-    const reqs = await tx`SELECT * FROM requests WHERE task_id = ${taskId} AND (status <> 'draft' OR asker_id = ${me}) ORDER BY created_at`;
+    const events = (await tx`SELECT * FROM events WHERE task_id = ${taskId} ORDER BY time ASC LIMIT 200`).filter(
+      (e) => !String(e.type).startsWith("request.") || (typeof e.data?.requestId === "string" && visibleIds.has(e.data.requestId)),
+    );
+    const reqs = visibleReqs;
     const decisions = await tx`SELECT * FROM decisions WHERE task_id = ${taskId} ORDER BY decided_at`;
     const L: string[] = [];
     L.push(`# Handoff: ${task.title}`);
@@ -194,12 +198,10 @@ export async function buildHandoff(p: Principal, taskId: string): Promise<{ mark
     L.push("", "## Requests");
     if (!reqs.length) L.push("_None._");
     for (const r of reqs) {
-      L.push(`- **${r.title}** — ${who(r.asker_id)} -> ${who(r.receiver_id)} [${r.status}]`);
-      const parties = me === r.asker_id || me === r.receiver_id;
-      if (parties) {
-        const msgs = await tx`SELECT * FROM request_messages WHERE request_id = ${r.id} AND sent_by_id IS NOT NULL ORDER BY created_at`;
-        for (const m of msgs) L.push(`  - ${m.kind} by ${who(m.author_member_id)}${m.authored_by === "agent" ? " (agent draft)" : ""}: ${String(m.body).replace(/\n+/g, " ")}`);
-      }
+      L.push(`- **${r.title}** — ${who(r.askerId)} -> ${who(r.receiverId)} [${r.status}]`);
+      // r.messages is already filtered per viewer (canSeeMessage); the pack only ever includes SENT messages.
+      for (const m of r.messages.filter((x) => x.sentById !== null))
+        L.push(`  - ${m.kind} by ${who(m.authorMemberId)}${m.authoredBy === "agent" ? " (agent draft)" : ""}: ${m.body.replace(/\n+/g, " ")}`);
     }
     L.push("", "## Timeline");
     if (!events.length) L.push("_No events._");

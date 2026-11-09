@@ -5,7 +5,7 @@ import { bodyLimit } from "hono/body-limit";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { streamSSE } from "hono/streaming";
 import { ZodError, type z } from "zod";
-import { Id, Routes } from "@officehub/shared";
+import { ChangeMessage as ChangeMessageSchema, Id, Routes } from "@officehub/shared";
 import {
   HubError,
   actOnRequest,
@@ -34,6 +34,8 @@ import {
   recordDecision,
   revokeAgent,
   getBoard,
+  getRequest,
+  devMembers,
   updateOwnMascot,
   updateOwnStatus,
   verifyGithubSignature,
@@ -172,6 +174,12 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
     return c.json(await meBody({ kind: "human", workspaceId: m.workspaceId, memberId: m.id, role: m.role }));
   });
 
+  // Dev login picker: only when DEV_LOGIN_ENABLED=true (otherwise indistinguishable from an unknown route).
+  app.get("/auth/dev-members", async (c) => {
+    if (!config.devLoginEnabled) throw new HubError("not_found", "Not found", 404);
+    return c.json(await devMembers());
+  });
+
   app.get("/auth/github", (c) => {
     if (!config.githubClientId) throw new HubError("internal", "GitHub OAuth is not configured (GITHUB_CLIENT_ID)", 500);
     const state = crypto.randomUUID();
@@ -258,11 +266,13 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
     const h = H(c);
     return streamSSE(c, async (stream) => {
       await hub.start();
-      const queue: { kind: string; id: string }[] = [];
+      const queue: z.infer<typeof ChangeMessageSchema>[] = [];
       let wake: (() => void) | null = null;
       const off = hub.subscribe(h.workspaceId, (m) => {
+        const parsed = ChangeMessageSchema.safeParse({ kind: m.kind, id: m.id }); // kinds are exactly ChangeKind
+        if (!parsed.success) return;
         const push = () => {
-          queue.push({ kind: m.kind, id: m.id });
+          queue.push(parsed.data);
           wake?.();
         };
         // C13: never leak the existence of requests (or their events) the viewer cannot see.
@@ -303,6 +313,7 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
   });
 
   app.get("/w/:slug/requests", async (c) => c.json(await listRequests(H(c))));
+  app.get("/w/:slug/requests/:id", async (c) => c.json(await getRequest(H(c), uuidParam(c, "id"))));
   app.get("/w/:slug/inbox", async (c) => c.json(await listInbox(H(c), { actionOnly: true })));
   app.post("/w/:slug/requests/:id/read", async (c) => {
     await markRead(H(c), uuidParam(c, "id"));
@@ -330,8 +341,7 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
     return c.json(await createAgent(H(c), body), 201);
   });
   app.delete("/w/:slug/agents/:id", async (c) => {
-    await revokeAgent(H(c), uuidParam(c, "id"));
-    return c.json({ ok: true });
+    return c.json(await revokeAgent(H(c), uuidParam(c, "id")));
   });
 
   app.get("/w/:slug/tasks/:id/handoff", async (c) => c.json(await buildHandoff(H(c), uuidParam(c, "id"))));
@@ -347,7 +357,7 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
         await auditStandalone(a.workspaceId, { kind: "agent", agentId: a.agentId!, memberId: a.ownerId! }, { action: "auth.rejected", outcome: "token_revoked" }).catch(() => {});
       throw new HubError(a.reason === "revoked" ? "token_revoked" : "unauthenticated", a.reason === "revoked" ? "Token has been revoked" : "Unknown token", 401);
     }
-    const wait = config.limiter.check(a.principal.agentId, "any");
+    const wait = await config.limiter.check(a.principal.agentId, "any");
     if (wait) {
       c.header("Retry-After", String(wait));
       throw new HubError("rate_limited", `Too many requests; retry in ${wait}s`, 429);
