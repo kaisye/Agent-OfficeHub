@@ -19,7 +19,7 @@ Pose tĩnh (front idle) có alpha, cắt sát viền. Mỗi buddy có `{buddy}-5
 ## Tâm trạng (từ trạng thái)
 `PRESENCE_TO_MOOD` → huy hiệu nhỏ trên pose tĩnh **cộng** nhãn chữ tiếng Việt (không bao giờ chỉ dùng màu):
 
-| Presence | Mood | Duy hiệu | Nhãn |
+| Presence | Mood | Huy hiệu | Nhãn |
 |---|---|---|---|
 | working | focused | ● | đang làm |
 | waiting | waiting | … | đang chờ |
