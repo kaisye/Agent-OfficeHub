@@ -155,7 +155,14 @@ export const Routes = {
   handoff: { method: "GET", path: "/w/:slug/tasks/:id/handoff", res: z.object({ markdown: z.string() }) },
 
   // webhooks (connectors)
+  // Signature MUST verify with the per-workspace secret = HMAC-SHA256(key=GITHUB_WEBHOOK_SECRET, msg=workspaceId) as hex (SEC-08).
   githubWebhook: { method: "POST", path: "/hooks/github/:workspaceId" },
+  /** Admin only: what to paste into GitHub → Settings → Webhooks for this workspace. */
+  githubWebhookSetup: {
+    method: "GET",
+    path: "/w/:slug/connectors/github",
+    res: z.object({ payloadUrl: z.string().url(), secret: z.string(), events: z.array(z.string()) }),
+  },
 
   // audit
   audit: { method: "GET", path: "/w/:slug/audit", res: z.array(AuditEntry) }, // admin: all; member: own + own agents

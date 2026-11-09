@@ -10,7 +10,7 @@ Requirements: Node ≥ 22, pnpm 10, Docker.
 
 ```bash
 pnpm install
-cp .env.example .env
+cp .env.example .env   # then set DEV_LOGIN_ENABLED=true for local dev login
 pnpm db:up            # Postgres 16 on localhost:5433
 pnpm db:migrate
 pnpm db:seed          # Tripflix demo: 7 members + 2 dev agent tokens (printed once)
@@ -45,5 +45,6 @@ Start with [docs/proposal.md](docs/proposal.md) and [docs/ARCHITECTURE.md](docs/
 
 ```bash
 pnpm typecheck
-pnpm test        # API and DB tests need the docker Postgres running
+pnpm test        # unit + integration (needs the docker Postgres)
+pnpm e2e         # black-box API/MCP + Playwright against a running stack (QA suite)
 ```

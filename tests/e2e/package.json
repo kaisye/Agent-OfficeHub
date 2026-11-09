@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "pnpm run test:api && pnpm run test:ui",
     "test:api": "vitest run --config vitest.config.ts",
     "test:ui": "playwright test --config playwright.config.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "e2e": "pnpm run test:api && pnpm run test:ui"
   },
   "devDependencies": {
     "@hono/node-server": "^2.1.6",
