@@ -43,108 +43,104 @@ export interface ColorTokens {
   overlay: string;
 }
 
+/** Desk Buddies — Warm Studio raw palette (handoff DNA). Not themed: use the semantic tokens below in UI. */
+export const brandPalette = {
+  cream: "#F3EEE5",
+  cognac: "#AC633B",
+  walnut: "#594032",
+  forest: "#355B47",
+  cobalt: "#355BA6",
+  charcoal: "#292C28",
+  canvas: "#F8F8F2",
+  border: "#E5E4DA",
+  /** Extra tones used by the prototype CSS. */
+  sidebar: "#F0F0E7",
+  white: "#FFFEFA",
+  muted: "#85877E",
+  sageTint: "#DFE8D8",
+} as const;
+
+/** Office map "furniture" tones (floor, wood, rug) shared by the 2D office. Decorative only. */
+export const officeTones = {
+  floor: "#F1E9DA",
+  floorLine: "#EADDC9",
+  wall: "#E8DFCC",
+  woodLight: "#C8A47A",
+  wood: "#B58C63",
+  woodDark: "#896347",
+  rug: "#E4DFC8",
+} as const;
+
 export const colorLight: ColorTokens = {
-  bg: "#FBF7F0",
-  surface: "#FFFFFF",
-  surface2: "#F5EFE4",
-  border: "#E7DECF",
-  borderStrong: "#8F8372",
-  ink: "#241F2D",
-  inkMuted: "#5E5668",
-  primary: "#B93C0E",
-  primaryHover: "#9A3009",
-  primaryFg: "#FFFFFF",
-  primarySoft: "#FFEBDD",
-  primarySoftFg: "#7A2606",
-  agent: "#2C5F86",
+  bg: "#F8F8F2", // Canvas
+  surface: "#FFFEFA",
+  surface2: "#F0F0E7",
+  border: "#E5E4DA", // Border
+  borderStrong: "#85877E",
+  ink: "#292C28", // Charcoal
+  inkMuted: "#5C6056",
+  primary: "#355B47", // Forest
+  primaryHover: "#284A38",
+  primaryFg: "#FFFDF4",
+  primarySoft: "#E1EADA",
+  primarySoftFg: "#284A38",
+  agent: "#355BA6", // Cobalt
   agentFg: "#FFFFFF",
-  agentSoft: "#E6F0F8",
-  agentSoftFg: "#1E4568",
-  untrusted: "#8A5F00",
-  untrustedSoft: "#FFF4D6",
-  untrustedSoftFg: "#6B4A00",
-  success: "#1F7A4D",
-  successSoft: "#E1F4EA",
-  successSoftFg: "#15593A",
+  agentSoft: "#E8ECF6",
+  agentSoftFg: "#2A478A",
+  untrusted: "#94502B", // Cognac, darkened for text
+  untrustedSoft: "#F7EBDD",
+  untrustedSoftFg: "#6E3A1C",
+  success: "#2F6B4F",
+  successSoft: "#E1EADA",
+  successSoftFg: "#244F3B",
   warning: "#8A5F00",
-  warningSoft: "#FFF4D6",
+  warningSoft: "#F7EFDE",
   warningSoftFg: "#6B4A00",
-  danger: "#B42318",
-  dangerHover: "#8F1B12",
+  danger: "#A8402A",
+  dangerHover: "#862F1D",
   dangerFg: "#FFFFFF",
-  dangerSoft: "#FDE8E6",
-  dangerSoftFg: "#8F1B12",
-  focus: "#2C5F86",
-  overlay: "rgba(36, 31, 45, 0.45)",
+  dangerSoft: "#F9E9DF",
+  dangerSoftFg: "#7F2D1B",
+  focus: "#355BA6",
+  overlay: "rgba(38, 43, 35, 0.32)",
 };
 
+/** Warm dark: Walnut-tinted charcoal. */
 export const colorDark: ColorTokens = {
-  bg: "#1B1713",
-  surface: "#26211C",
-  surface2: "#312B24",
-  border: "#3F372E",
-  borderStrong: "#8C8070",
-  ink: "#F6EFE5",
-  inkMuted: "#BDB2A3",
-  primary: "#F28A4B",
-  primaryHover: "#F59E66",
-  primaryFg: "#1B1208",
-  primarySoft: "#432A1A",
-  primarySoftFg: "#FFD3B5",
-  agent: "#7DB6E0",
-  agentFg: "#0E2132",
-  agentSoft: "#1D2E3D",
-  agentSoftFg: "#BFDDF3",
-  untrusted: "#E0B040",
-  untrustedSoft: "#3A2F12",
-  untrustedSoftFg: "#F4D98A",
-  success: "#63C592",
-  successSoft: "#1A3427",
+  bg: "#1B1814",
+  surface: "#25211B",
+  surface2: "#2F2A23",
+  border: "#3E382E",
+  borderStrong: "#8C8473",
+  ink: "#F3EEE5", // Cream
+  inkMuted: "#BDB5A5",
+  primary: "#86C2A2",
+  primaryHover: "#9DD0B5",
+  primaryFg: "#10241A",
+  primarySoft: "#233A2E",
+  primarySoftFg: "#C2E4D1",
+  agent: "#8FAAE8",
+  agentFg: "#0F1E3F",
+  agentSoft: "#202A45",
+  agentSoftFg: "#C7D6F6",
+  untrusted: "#E3A878",
+  untrustedSoft: "#3A2B1D",
+  untrustedSoftFg: "#F2D4B0",
+  success: "#7DC59A",
+  successSoft: "#1D3427",
   successSoftFg: "#B5E8CE",
   warning: "#E0B040",
   warningSoft: "#3A2F12",
   warningSoftFg: "#F4D98A",
-  danger: "#F27A6E",
-  dangerHover: "#F59A90",
+  danger: "#F08A78",
+  dangerHover: "#F5A394",
   dangerFg: "#2A0A06",
-  dangerSoft: "#401C18",
-  dangerSoftFg: "#FFC9C2",
-  focus: "#7DB6E0",
+  dangerSoft: "#40201A",
+  dangerSoftFg: "#FFCDC2",
+  focus: "#8FAAE8",
   overlay: "rgba(0, 0, 0, 0.6)",
 };
-
-/** Mascot palettes. `base` body, `light` belly/muzzle, `dark` outline + facial features, `accent` accessories. */
-export interface MascotPalette {
-  label: string; // Vietnamese
-  base: string;
-  light: string;
-  dark: string;
-  accent: string;
-}
-
-export const mascotPalettes = {
-  sunrise: { label: "Bình minh", base: "#FFB84D", light: "#FFE6B0", dark: "#7A3E0B", accent: "#FF6F59" },
-  ocean: { label: "Đại dương", base: "#6EC1E4", light: "#D6F0FA", dark: "#124A6B", accent: "#FF8A65" },
-  forest: { label: "Rừng xanh", base: "#7CCB8C", light: "#DCF3E0", dark: "#1E5632", accent: "#F4B942" },
-  grape: { label: "Nho tím", base: "#B79CEB", light: "#EBE2FC", dark: "#44307A", accent: "#FF9EBB" },
-  coral: { label: "San hô", base: "#FF8F8A", light: "#FFDCD9", dark: "#7F2630", accent: "#4FB6A8" },
-  slate: { label: "Đá phiến", base: "#9AA8BC", light: "#E3E8EF", dark: "#2B3648", accent: "#F2B84B" },
-  sand: { label: "Cát", base: "#E8CFA0", light: "#F9F0DF", dark: "#6B4F28", accent: "#6BA3D6" },
-} as const satisfies Record<string, MascotPalette>;
-
-/** Fixed mascot details shared by all palettes. */
-export const mascotShared = {
-  cheek: "#FF8FA3",
-  white: "#FFFFFF",
-  leaf: "#5DBB6E",
-  leafDark: "#2F7A3E",
-  sweat: "#8ED4F5",
-  star: "#F5B93A",
-  agentBadge: "#2C5F86",
-  chipFill: "#FFFFFF",
-  alert: "#C0392B",
-  info: "#2C5F86",
-} as const;
 
 export const fontFamily = {
   sans: `"Be Vietnam Pro", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`,
@@ -172,12 +168,13 @@ export const spacing = {
   0: 0, 1: 4, 2: 8, 3: 12, 4: 16, 5: 20, 6: 24, 8: 32, 10: 40, 12: 48, 16: 64,
 } as const;
 
-export const radius = { sm: 6, md: 10, lg: 16, xl: 24, full: 9999 } as const;
+/** Handoff: input/button 9-10, card 14-16, modal 20. */
+export const radius = { sm: 6, md: 10, lg: 16, xl: 20, full: 9999 } as const;
 
 export const shadowLight = {
-  sm: "0 1px 2px rgba(60, 40, 20, 0.08)",
-  md: "0 4px 12px rgba(60, 40, 20, 0.10)",
-  lg: "0 12px 32px rgba(60, 40, 20, 0.16)",
+  sm: "0 1px 2px rgba(89, 64, 50, 0.06)",
+  md: "0 3px 18px rgba(89, 64, 50, 0.08)",
+  lg: "0 15px 60px rgba(41, 44, 40, 0.14)",
 } as const;
 export const shadowDark = {
   sm: "0 1px 2px rgba(0, 0, 0, 0.4)",
@@ -238,12 +235,8 @@ export function buildTokensCss(): string {
     `  --oh-surface2: var(--oh-surface-2);`,
     `  --oh-ease-standard: ${motion.easing.standard};`,
     `  --oh-ease-out: ${motion.easing.out};`,
-    ...Object.entries(mascotPalettes).flatMap(([name, p]) => [
-      `  --oh-mascot-${name}-base: ${p.base};`,
-      `  --oh-mascot-${name}-light: ${p.light};`,
-      `  --oh-mascot-${name}-dark: ${p.dark};`,
-      `  --oh-mascot-${name}-accent: ${p.accent};`,
-    ]),
+    ...Object.entries(brandPalette).map(([k, v]) => `  --oh-brand-${k}: ${v};`),
+    ...Object.entries(officeTones).map(([k, v]) => `  --oh-office-${kebab(k)}: ${v};`),
   ].join("\n");
 
   return `/* GENERATED by packages/brand/scripts/build-css.ts from src/tokens.ts — do not edit by hand. */
@@ -293,9 +286,7 @@ export function buildTailwindThemeCss(): string {
     .map((k) => `  --color-oh-${kebab(k)}: var(--oh-${kebab(k)});`)
     .join("\n");
   const overlay = `  --color-oh-overlay: var(--oh-overlay);`;
-  const palettes = Object.keys(mascotPalettes)
-    .flatMap((n) => ["base", "light", "dark", "accent"].map((r) => `  --color-oh-${n}-${r}: var(--oh-mascot-${n}-${r});`))
-    .join("\n");
+  const palettes = [...(["cream", "cognac", "walnut", "forest", "cobalt", "charcoal"] as const).map((k) => `  --color-oh-${k}: var(--oh-brand-${k});`)].join("\n");
   const text = Object.keys(typeScale)
     .map((k) => `  --text-oh-${k}: var(--oh-text-${k});\n  --text-oh-${k}--line-height: var(--oh-text-${k}-line);`)
     .join("\n");

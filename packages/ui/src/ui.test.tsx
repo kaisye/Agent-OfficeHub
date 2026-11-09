@@ -12,7 +12,7 @@ const B = "22222222-2222-4222-8222-222222222222";
 const W = "33333333-3333-4333-8333-333333333333";
 const mem = (id: string, name: string): Member => ({
   id, workspaceId: W, displayName: name, githubLogin: null, role: "member", areas: [],
-  mascot: { species: "cat", palette: "ocean", accessory: null, seed: 1 },
+  mascot: { buddy: "milo" },
 });
 const asker = mem(A, "Trang");
 const receiver = mem(B, "Phong");
@@ -208,8 +208,8 @@ describe("screen reader semantics", () => {
   });
   it("default mascot title is natural Vietnamese; decorative mascots are hidden", () => {
     const { container } = render(<><Mascot mascot={asker.mascot} mood="focused" /><Mascot mascot={asker.mascot} decorative /></>);
-    expect(screen.getByRole("img", { name: "Linh vật mèo, đang làm" })).toBeTruthy();
-    expect(container.querySelectorAll("svg[aria-hidden='true']")).toHaveLength(1);
+    expect(screen.getByRole("img", { name: "Linh vật Milo, đang làm" })).toBeTruthy();
+    expect(container.querySelectorAll("img[aria-hidden='true']")).toHaveLength(1);
     expect(screen.getAllByRole("img")).toHaveLength(1);
   });
   it("toasts: polite status region for info, assertive alert region for errors", () => {

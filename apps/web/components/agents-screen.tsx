@@ -35,7 +35,7 @@ export function AgentsScreen() {
   const mine = (agents.data ?? []).filter((a) => a.ownerId === me.id);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
+    <div className="max-w-3xl space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-oh-2xl font-bold">Agent của tôi</h1>
@@ -53,7 +53,7 @@ export function AgentsScreen() {
       ) : mine.length === 0 ? (
         <EmptyState
           title="Bạn chưa có agent nào"
-          mascot={{ species: "bot", palette: "slate", accessory: null, seed: 3 }}
+          mascot={me.mascot}
           description="Thêm agent để Claude Code, Codex hay Gemini CLI đọc bảng và soạn nháp giúp bạn."
           action={
             <Button variant="primary" onClick={() => setAdding(true)}>

@@ -61,7 +61,7 @@ describe("visibility C13", () => {
     expect(board.recentEvents.some((e) => e.type === "request.sent")).toBe(true);
     // third party member (alice is admin; use a 4th member through admin sql)
     const { adminSql } = await import("../src/client.js");
-    const [dave] = await adminSql()`INSERT INTO members (workspace_id, display_name, role, mascot) VALUES (${w.id}, 'Dave', 'member', ${adminSql().json({ species: "cat", palette: "ocean", accessory: null, seed: 1 })}) RETURNING id`;
+    const [dave] = await adminSql()`INSERT INTO members (workspace_id, display_name, role, mascot) VALUES (${w.id}, 'Dave', 'member', ${adminSql().json({ buddy: "pip" })}) RETURNING id`;
     const daveP = { kind: "human" as const, workspaceId: w.id, memberId: dave!.id as string, role: "member" as const };
     const b2 = await getBoard(daveP);
     expect(b2.openRequests.length).toBe(0);

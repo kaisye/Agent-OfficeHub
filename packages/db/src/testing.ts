@@ -26,7 +26,7 @@ export async function makeWorkspace(prefix = "t"): Promise<TestWorkspace> {
     const mid = randomUUID();
     await sql`INSERT INTO members (id, workspace_id, display_name, github_login, role, areas, mascot)
       VALUES (${mid}, ${id}, ${name}, ${`${name.toLowerCase()}-${id.slice(0, 6)}`}, ${role}, ${["x"]}::text[],
-      ${sql.json({ species: "blob", palette: "sunrise", accessory: null, seed: 1 })})`;
+      ${sql.json({ buddy: "milo" })})`;
     return mid;
   };
   const alice = await mk("Alice", "admin");

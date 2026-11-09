@@ -6,7 +6,7 @@ import type { Me } from "@officehub/shared";
 import { isApiError } from "@/lib/api";
 import { useMe, useRealtime } from "@/lib/hooks";
 import { PageSkeleton } from "./skeletons";
-import { TopNav } from "./top-nav";
+import { AppShell } from "./shell";
 
 interface Ctx {
   slug: string;
@@ -60,10 +60,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
   return (
     <WorkspaceCtx.Provider value={{ slug, me: me.data }}>
       <Realtime slug={slug} />
-      <TopNav />
-      <main id="main" className="mx-auto w-full min-w-0 max-w-7xl overflow-x-clip px-4 pb-16 pt-6 sm:px-6">
-        {children}
-      </main>
+      <AppShell>{children}</AppShell>
     </WorkspaceCtx.Provider>
   );
 }

@@ -1,6 +1,6 @@
 # Bộ UI (`@officehub/ui`)
 
-React 19 + Tailwind v4, tiện ích `oh-*` trỏ tới biến CSS `--oh-*` của `@officehub/brand`. Chưa có Storybook: xem linh vật ở `packages/brand/preview/gallery.html`; mô tả hình dưới đây bằng lời. Tất cả nhãn aria bằng tiếng Việt, mọi điều khiển đều có focus ring 3px xanh khói.
+React 19 + Tailwind v4, tiện ích `oh-*` trỏ tới biến CSS `--oh-*` của `@officehub/brand`. Chưa có Storybook; xem linh vật tại trang Mascot của bạn trong ứng dụng. Tất cả nhãn aria bằng tiếng Việt, mọi điều khiển đều có focus ring 3px Cobalt.
 
 ```tsx
 import { Mascot, RequestCard, DraftBlock, ToastProvider } from "@officehub/ui";

@@ -16,6 +16,7 @@ import {
   UntrustedQuote,
   availableActions,
   relativeTimeVi,
+  requestDirectionLabel,
   requestStatusText,
 } from "@officehub/ui";
 import { bodyRequirement, canSeeMessage, type Actor, type Member, type Request, type RequestAction, type RequestMessage } from "@officehub/shared";
@@ -29,8 +30,9 @@ import { useWorkspace } from "./workspace";
 
 const KIND_LABEL: Record<RequestMessage["kind"], string> = { ask: "Câu hỏi", reply: "Trả lời", follow_up: "Hỏi lại" };
 
-export function RequestDetail() {
-  const { id } = useParams<{ id: string }>();
+export function RequestDetail({ id: idProp, embedded }: { id?: string; embedded?: boolean } = {}) {
+  const params = useParams<{ id: string }>();
+  const id = idProp ?? params.id;
   const { slug, me } = useWorkspace();
   const board = useBoard(slug);
   const found = useRequest(slug, id);
@@ -76,10 +78,11 @@ export function RequestDetail() {
   const receiver = map.get(request.receiverId);
   if (!asker || !receiver) return null;
   const task = board.data.tasks.find((t) => t.id === request.taskId);
-  return <Thread key={request.id} slug={slug} me={me} request={request} asker={asker} receiver={receiver} members={board.data.members} task={task} />;
+  return <Thread key={request.id} embedded={!!embedded} slug={slug} me={me} request={request} asker={asker} receiver={receiver} members={board.data.members} task={task} />;
 }
 
 function Thread({
+  embedded,
   slug,
   me,
   request,
@@ -88,6 +91,7 @@ function Thread({
   members,
   task,
 }: {
+  embedded: boolean;
   slug: string;
   me: Member;
   request: Request;
@@ -147,15 +151,16 @@ function Thread({
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
-      <Link href={`/w/${slug}/requests`} className="inline-flex items-center gap-1 text-oh-sm text-oh-ink-muted hover:text-oh-ink focus-visible:outline-3 focus-visible:outline-oh-focus">
+    <div className={embedded ? "space-y-5" : "mx-auto max-w-3xl space-y-5"}>
+      {!embedded && <Link href={`/w/${slug}/requests`} className="inline-flex items-center gap-1 text-oh-sm text-oh-ink-muted hover:text-oh-ink focus-visible:outline-3 focus-visible:outline-oh-focus">
         <Icon name="reply" size={14} />
         Tất cả yêu cầu
-      </Link>
+      </Link>}
+      <p className="text-oh-xs font-semibold uppercase tracking-wider text-oh-ink-muted">{requestDirectionLabel(request, me.id, asker.displayName, receiver.displayName)}</p>
 
       <header className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
-          <h1 className="min-w-0 flex-1 text-oh-2xl font-bold">{request.title}</h1>
+          <h1 className="min-w-0 flex-1 text-oh-xl font-bold sm:text-oh-2xl">{request.title}</h1>
           <div className="flex gap-1.5">
             {overdue && (
               <Badge tone="danger" icon="alert">
@@ -168,17 +173,17 @@ function Thread({
         <p className="text-oh-sm text-oh-ink-muted">{help}</p>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-oh-sm">
           <span className="inline-flex items-center gap-2">
-            <Mascot mascot={asker.mascot} mood="relaxed" size={32} decorative />
+            <Mascot mascot={asker.mascot} mood="relaxed" size={32} decorative noBadge />
             <b>{asker.displayName}</b>
             <Icon name="reply" size={14} className="rotate-180 text-oh-ink-muted" />
-            <Mascot mascot={receiver.mascot} mood="relaxed" size={32} decorative />
+            <Mascot mascot={receiver.mascot} mood="relaxed" size={32} decorative noBadge />
             <b>{receiver.displayName}</b>
           </span>
           {request.dueAt && <span className="text-oh-ink-muted">Hạn {new Date(request.dueAt).toLocaleDateString("vi-VN")}</span>}
           {task && (
             <span className="inline-flex items-center gap-2">
               <TaskChip task={task} />
-              <Link href={`/w/${slug}/tasks/${task.id}`} className="font-medium underline-offset-2 hover:underline">
+              <Link href={`/w/${slug}/tasks/${task.id}`} className="whitespace-nowrap font-medium underline-offset-2 hover:underline">
                 Bàn giao
               </Link>
             </span>

@@ -111,11 +111,11 @@ export function RequestCard({ request, asker, receiver, viewerMemberId, onAction
       <p className="text-oh-xs text-oh-ink-muted">{help}</p>
 
       <div className="flex items-center gap-2 text-oh-sm" aria-label={`${asker.displayName} hỏi ${receiver.displayName}`}>
-        <Mascot mascot={asker.mascot} mood="relaxed" size={32} decorative />
+        <Mascot mascot={asker.mascot} mood="relaxed" size={32} decorative noBadge />
         <span className="font-medium">{asker.displayName}</span>
         <Icon name="reply" size={14} className="rotate-180 text-oh-ink-muted" />
         <span className="sr-only">hỏi</span>
-        <Mascot mascot={receiver.mascot} mood="relaxed" size={32} decorative />
+        <Mascot mascot={receiver.mascot} mood="relaxed" size={32} decorative noBadge />
         <span className="font-medium">{receiver.displayName}</span>
         {request.dueAt && <span className="ml-auto text-oh-xs text-oh-ink-muted">Hạn {new Date(request.dueAt).toLocaleDateString("vi-VN")}</span>}
       </div>

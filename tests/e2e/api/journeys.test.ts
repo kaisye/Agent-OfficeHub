@@ -13,7 +13,7 @@ describe("J1 dev login -> board (BRD-01)", () => {
     const b = await board(phong);
     expect(b.members).toHaveLength(7);
     expect(b.cards.length).toBeGreaterThanOrEqual(7);
-    for (const m of b.members) expect(m.mascot).toMatchObject({ species: expect.any(String), palette: expect.any(String) });
+    for (const m of b.members) expect(m.mascot).toMatchObject({ buddy: expect.any(String) });
     expect(b.workspace.slug).toBe(SLUG);
   });
   it("unauthenticated board is 401", async () => {

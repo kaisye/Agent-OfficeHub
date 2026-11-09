@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createAgent, login, sha256, sql, type Session } from "./helpers.js";
 
 export const WS2_SLUG = "qa-e2e-other";
-const mascot = { species: "cat", palette: "ocean", accessory: null, seed: 1 };
+const mascot = { buddy: "pip" };
 
 export interface Tenant2 {
   workspaceId: string;

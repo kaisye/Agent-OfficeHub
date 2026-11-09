@@ -13,8 +13,9 @@ import { ListSkeleton } from "./skeletons";
 import { useWorkspace } from "./workspace";
 
 /** Bàn giao: a task, its events, related requests and decisions, plus the generated handoff pack (HOF-01, HOF-02). */
-export function TaskScreen() {
-  const { id } = useParams<{ id: string }>();
+export function TaskScreen({ id: idProp, embedded }: { id?: string; embedded?: boolean } = {}) {
+  const params = useParams<{ id: string }>();
+  const id = idProp ?? params.id;
   const { slug, me } = useWorkspace();
   const board = useBoard(slug);
   const requests = useRequests(slug);
@@ -59,15 +60,15 @@ export function TaskScreen() {
   return (
     <div className="space-y-6">
       <div className="space-y-3">
-        <Link href={`/w/${slug}`} className="inline-flex items-center gap-1 text-oh-sm text-oh-ink-muted hover:text-oh-ink focus-visible:outline-3 focus-visible:outline-oh-focus">
+        {!embedded && <Link href={`/w/${slug}`} className="inline-flex items-center gap-1 text-oh-sm text-oh-ink-muted hover:text-oh-ink focus-visible:outline-3 focus-visible:outline-oh-focus">
           <Icon name="reply" size={14} />
           Văn phòng
-        </Link>
+        </Link>}
         <h1 className="text-oh-2xl font-bold">Bàn giao: {task.title}</h1>
         <div className="flex flex-wrap items-center gap-3">
           <TaskChip task={task} />
           <span className="inline-flex items-center gap-1.5 text-oh-sm text-oh-ink-muted">
-            {owner && <Mascot mascot={owner.mascot} mood="relaxed" size={24} decorative />}
+            {owner && <Mascot mascot={owner.mascot} mood="relaxed" size={24} decorative noBadge />}
             {owner ? `${owner.displayName} phụ trách` : "Chưa giao ai"}
           </span>
           {task.syncedAt && <span className="text-oh-xs text-oh-ink-muted">Đồng bộ {relativeTimeVi(task.syncedAt)}</span>}
@@ -77,7 +78,7 @@ export function TaskScreen() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className={embedded ? "grid gap-6" : "grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]"}>
         <section aria-labelledby="pack-h" className="min-w-0">
           <Card>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -116,7 +117,7 @@ export function TaskScreen() {
                   return (
                     <li key={r.id}>
                       <Link href={`/w/${slug}/requests/${r.id}`} className="flex items-center gap-2 rounded-oh-lg border border-oh-border bg-oh-surface p-2.5 hover:shadow-oh-md focus-visible:outline-3 focus-visible:outline-oh-focus">
-                        {other && <Mascot mascot={other.mascot} mood="relaxed" size={32} decorative />}
+                        {other && <Mascot mascot={other.mascot} mood="relaxed" size={32} decorative noBadge />}
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-oh-sm font-medium">{r.title}</span>
                           <span className="text-oh-xs text-oh-ink-muted">{label}</span>

@@ -58,3 +58,27 @@ const ACTION_ORDER: RequestAction[] = ["send", "send_reply", "accept", "follow_u
 export function availableActions(request: Pick<Request, "status" | "askerId" | "receiverId">, actor: Actor): RequestAction[] {
   return ACTION_ORDER.filter((a) => canTransition(request, a, actor).ok);
 }
+
+/**
+ * Direction-aware heading for a request ("Nháp agent của bạn · gửi Minh", "Minh hỏi bạn", "Bạn hỏi Minh").
+ * Unsent drafts are visible only to their owner (canSeeMessage), so the draft wording is only used for that side.
+ */
+export function requestDirectionLabel(
+  request: Pick<Request, "status" | "askerId" | "receiverId" | "messages">,
+  viewerMemberId: string,
+  askerName: string,
+  receiverName: string,
+): string {
+  const side = viewerMemberId === request.askerId ? "asker" : viewerMemberId === request.receiverId ? "receiver" : "observer";
+  const last = request.messages[request.messages.length - 1];
+  const unsentByAgent = !!last && last.sentById === null && last.authoredBy === "agent";
+  if (side === "asker") {
+    if (request.status === "draft") return `${unsentByAgent ? "Nháp agent của bạn" : "Nháp của bạn"} · gửi ${receiverName}`;
+    return `Bạn hỏi ${receiverName}`;
+  }
+  if (side === "receiver") {
+    if (request.status === "reply_drafted") return `${unsentByAgent ? "Nháp agent của bạn" : "Nháp của bạn"} · trả lời ${askerName}`;
+    return `${askerName} hỏi bạn`;
+  }
+  return `${askerName} hỏi ${receiverName}`;
+}
