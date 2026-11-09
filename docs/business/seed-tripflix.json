@@ -1,0 +1,782 @@
+{
+  "_note": "Dữ liệu mẫu cho dev/demo. Phong, Trang, Bảo là tên thật từ đề xuất; Minh, Lan, Huy, Ngọc và các githubLogin là PLACEHOLDER bịa. tokenPrefix là giá trị giả, không phải token thật. Mọi UUID cố định (v4), giờ +07:00 quanh 2026-11-09. Request 'env' (sent) đã quá hạn so với 09:00 ngày 09/11 để demo nhắc quá hạn. Event request.* có data.requestId, decision.recorded có data.decisionId.",
+  "workspace": {
+    "id": "d515b602-a2be-4f07-935b-21114ae80a69",
+    "name": "Tripflix",
+    "slug": "tripflix",
+    "connectors": [
+      "github"
+    ],
+    "createdAt": "2026-11-02T08:00:00+07:00"
+  },
+  "members": [
+    {
+      "id": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "displayName": "Phong",
+      "githubLogin": "phong-tripflix",
+      "role": "admin",
+      "areas": [
+        "feed",
+        "media",
+        "video-worker",
+        "deploy",
+        "ui"
+      ],
+      "mascot": {
+        "species": "fox",
+        "palette": "sunrise",
+        "accessory": "headphones",
+        "seed": 7
+      }
+    },
+    {
+      "id": "97c2557b-189e-4b54-8c73-a89dfa40e274",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "displayName": "Trang",
+      "githubLogin": "trang-tripflix",
+      "role": "member",
+      "areas": [
+        "api",
+        "staging"
+      ],
+      "mascot": {
+        "species": "cat",
+        "palette": "ocean",
+        "accessory": "glasses",
+        "seed": 21
+      }
+    },
+    {
+      "id": "7f7870ee-bc43-47b5-84fc-001dc3081d57",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "displayName": "Bảo",
+      "githubLogin": "bao-tripflix",
+      "role": "member",
+      "areas": [
+        "ai",
+        "comments"
+      ],
+      "mascot": {
+        "species": "owl",
+        "palette": "forest",
+        "accessory": null,
+        "seed": 35
+      }
+    },
+    {
+      "id": "3c343b90-4f1b-4be5-a283-34c921c55092",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "displayName": "Minh",
+      "githubLogin": "minh-placeholder",
+      "role": "member",
+      "areas": [
+        "mobile",
+        "deploy"
+      ],
+      "mascot": {
+        "species": "bear",
+        "palette": "coral",
+        "accessory": "cap",
+        "seed": 48
+      }
+    },
+    {
+      "id": "ed5375c3-a3b1-400c-a0c3-70593a3824e6",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "displayName": "Lan",
+      "githubLogin": "lan-placeholder",
+      "role": "member",
+      "areas": [
+        "design",
+        "ui"
+      ],
+      "mascot": {
+        "species": "blob",
+        "palette": "grape",
+        "accessory": "beret",
+        "seed": 63
+      }
+    },
+    {
+      "id": "7fe8eadd-e822-4278-9780-44a6351c2d8c",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "displayName": "Huy",
+      "githubLogin": "huy-placeholder",
+      "role": "member",
+      "areas": [
+        "qa"
+      ],
+      "mascot": {
+        "species": "bot",
+        "palette": "slate",
+        "accessory": null,
+        "seed": 77
+      }
+    },
+    {
+      "id": "c1c9656e-44f4-493b-b124-69c75f53a565",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "displayName": "Ngọc",
+      "githubLogin": "ngoc-placeholder",
+      "role": "member",
+      "areas": [
+        "data",
+        "video-worker"
+      ],
+      "mascot": {
+        "species": "cat",
+        "palette": "sand",
+        "accessory": "scarf",
+        "seed": 92
+      }
+    }
+  ],
+  "cards": [
+    {
+      "memberId": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+      "presence": "working",
+      "doing": "Gộp compose deploy cho video-worker (PR #219)",
+      "branch": "feat/deploy-video-worker",
+      "waitingOn": [],
+      "updatedAt": "2026-11-09T09:12:00+07:00",
+      "updatedBy": "agent"
+    },
+    {
+      "memberId": "97c2557b-189e-4b54-8c73-a89dfa40e274",
+      "presence": "reviewing",
+      "doing": "Review PR #214 tách tag theo app",
+      "branch": null,
+      "waitingOn": [],
+      "updatedAt": "2026-11-09T09:30:00+07:00",
+      "updatedBy": "human"
+    },
+    {
+      "memberId": "7f7870ee-bc43-47b5-84fc-001dc3081d57",
+      "presence": "waiting",
+      "doing": "Chờ key OpenAI để chạy TRIP-42 trên staging",
+      "branch": "feat/openai-title-suggest",
+      "waitingOn": [
+        "adcf8a47-7647-4b1f-952a-76723d7a3413"
+      ],
+      "updatedAt": "2026-11-09T08:55:00+07:00",
+      "updatedBy": "agent"
+    },
+    {
+      "memberId": "3c343b90-4f1b-4be5-a283-34c921c55092",
+      "presence": "blocked",
+      "doing": "PR #221 xung đột với #219 ở deploy/",
+      "branch": "chore/staging-env",
+      "waitingOn": [
+        "adcf8a47-7647-4b1f-952a-76723d7a3413"
+      ],
+      "updatedAt": "2026-11-09T09:40:00+07:00",
+      "updatedBy": "human"
+    },
+    {
+      "memberId": "ed5375c3-a3b1-400c-a0c3-70593a3824e6",
+      "presence": "idle",
+      "doing": null,
+      "branch": null,
+      "waitingOn": [],
+      "updatedAt": "2026-11-09T09:05:00+07:00",
+      "updatedBy": "human"
+    },
+    {
+      "memberId": "7fe8eadd-e822-4278-9780-44a6351c2d8c",
+      "presence": "offline",
+      "doing": null,
+      "branch": null,
+      "waitingOn": [],
+      "updatedAt": "2026-11-08T18:20:00+07:00",
+      "updatedBy": "human"
+    },
+    {
+      "memberId": "c1c9656e-44f4-493b-b124-69c75f53a565",
+      "presence": "working",
+      "doing": "Thử retry cho video-worker",
+      "branch": "fix/video-worker-retry",
+      "waitingOn": [],
+      "updatedAt": "2026-11-09T09:22:00+07:00",
+      "updatedBy": "human"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "518b5f18-72d3-4640-9e4c-1256e8ac1dfe",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "source": "github_pr",
+      "externalUrl": "https://github.com/tripflix/tripflix/pull/214",
+      "externalKey": "#214",
+      "title": "Tách tag release theo từng app (web, api, video-worker)",
+      "assigneeId": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+      "state": "in_review",
+      "syncedAt": "2026-11-09T09:28:00+07:00"
+    },
+    {
+      "id": "c3a2d136-3280-4f75-b22d-3290b3a33ce9",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "source": "github_issue",
+      "externalUrl": "https://github.com/tripflix/tripflix/issues/208",
+      "externalKey": "#208",
+      "title": "Giảm bộ đếm bình luận khi ẩn bình luận",
+      "assigneeId": "7f7870ee-bc43-47b5-84fc-001dc3081d57",
+      "state": "in_progress",
+      "syncedAt": "2026-11-09T09:00:00+07:00"
+    },
+    {
+      "id": "d7ab7ebd-8e38-4406-8855-4879344ef703",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "source": "github_pr",
+      "externalUrl": "https://github.com/tripflix/tripflix/pull/219",
+      "externalKey": "#219",
+      "title": "deploy/: gộp compose cho video-worker",
+      "assigneeId": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+      "state": "in_progress",
+      "syncedAt": "2026-11-09T09:12:00+07:00"
+    },
+    {
+      "id": "e087283f-a8bc-4676-a6c9-8fae9cd3a7af",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "source": "github_pr",
+      "externalUrl": "https://github.com/tripflix/tripflix/pull/221",
+      "externalKey": "#221",
+      "title": "deploy/: đổi biến môi trường staging",
+      "assigneeId": "3c343b90-4f1b-4be5-a283-34c921c55092",
+      "state": "blocked",
+      "syncedAt": "2026-11-09T09:40:00+07:00"
+    },
+    {
+      "id": "6eafe1f7-ea97-4f3c-ada0-bbae3edce21e",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "source": "jira",
+      "externalUrl": "https://tripflix.atlassian.net/browse/TRIP-42",
+      "externalKey": "TRIP-42",
+      "title": "Gợi ý tiêu đề bằng OpenAI",
+      "assigneeId": "7f7870ee-bc43-47b5-84fc-001dc3081d57",
+      "state": "blocked",
+      "syncedAt": "2026-11-09T08:50:00+07:00"
+    },
+    {
+      "id": "88e29467-1833-40f6-b074-9ce0e5e24189",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "source": "github_issue",
+      "externalUrl": "https://github.com/tripflix/tripflix/issues/203",
+      "externalKey": "#203",
+      "title": "Server staging ghim sai tag release",
+      "assigneeId": "97c2557b-189e-4b54-8c73-a89dfa40e274",
+      "state": "done",
+      "syncedAt": "2026-11-09T08:30:00+07:00"
+    },
+    {
+      "id": "d2003a26-a89c-44fb-a344-cedffaaf96c1",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "source": "jira",
+      "externalUrl": "https://tripflix.atlassian.net/browse/TRIP-47",
+      "externalKey": "TRIP-47",
+      "title": "Feed: skeleton loading",
+      "assigneeId": "ed5375c3-a3b1-400c-a0c3-70593a3824e6",
+      "state": "in_progress",
+      "syncedAt": "2026-11-09T09:00:00+07:00"
+    },
+    {
+      "id": "18065409-1014-42fa-981e-850e4d6518f1",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "source": "manual",
+      "externalUrl": null,
+      "externalKey": null,
+      "title": "Chuẩn bị demo thứ Sáu cho khách",
+      "assigneeId": null,
+      "state": "open",
+      "syncedAt": null
+    }
+  ],
+  "events": [
+    {
+      "id": "3e38a2c8-2e6c-40ac-9bee-d8944d549738",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "specversion": "1.0",
+      "source": "github",
+      "type": "pr.opened",
+      "time": "2026-11-08T16:10:00+07:00",
+      "taskId": "518b5f18-72d3-4640-9e4c-1256e8ac1dfe",
+      "actorMemberId": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+      "actorAgentId": null,
+      "data": {
+        "number": 214,
+        "title": "Tách tag release theo từng app"
+      }
+    },
+    {
+      "id": "d95be8d4-e298-45ea-97e9-4464db6b0dee",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "specversion": "1.0",
+      "source": "github",
+      "type": "pr.opened",
+      "time": "2026-11-08T17:02:00+07:00",
+      "taskId": "d7ab7ebd-8e38-4406-8855-4879344ef703",
+      "actorMemberId": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+      "actorAgentId": null,
+      "data": {
+        "number": 219
+      }
+    },
+    {
+      "id": "8ed41509-b03a-4700-a07b-f222c907e51a",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "specversion": "1.0",
+      "source": "github",
+      "type": "pr.opened",
+      "time": "2026-11-09T08:20:00+07:00",
+      "taskId": "e087283f-a8bc-4676-a6c9-8fae9cd3a7af",
+      "actorMemberId": "3c343b90-4f1b-4be5-a283-34c921c55092",
+      "actorAgentId": null,
+      "data": {
+        "number": 221
+      }
+    },
+    {
+      "id": "b34bcb5a-0b43-4038-8165-a7216766c9d4",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "specversion": "1.0",
+      "source": "github",
+      "type": "ci.failed",
+      "time": "2026-11-09T08:35:00+07:00",
+      "taskId": "e087283f-a8bc-4676-a6c9-8fae9cd3a7af",
+      "actorMemberId": "3c343b90-4f1b-4be5-a283-34c921c55092",
+      "actorAgentId": null,
+      "data": {
+        "number": 221,
+        "job": "lint-compose"
+      }
+    },
+    {
+      "id": "34d12b3c-76de-47d5-a064-9a050a5f048a",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "specversion": "1.0",
+      "source": "github",
+      "type": "issue.closed",
+      "time": "2026-11-09T08:30:00+07:00",
+      "taskId": "88e29467-1833-40f6-b074-9ce0e5e24189",
+      "actorMemberId": "97c2557b-189e-4b54-8c73-a89dfa40e274",
+      "actorAgentId": null,
+      "data": {
+        "number": 203
+      }
+    },
+    {
+      "id": "e0822f06-6e32-428c-be1e-5be0921d21bf",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "specversion": "1.0",
+      "source": "github",
+      "type": "pr.review_requested",
+      "time": "2026-11-09T08:40:00+07:00",
+      "taskId": "518b5f18-72d3-4640-9e4c-1256e8ac1dfe",
+      "actorMemberId": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+      "actorAgentId": null,
+      "data": {
+        "number": 214,
+        "reviewer": "trang-tripflix"
+      }
+    },
+    {
+      "id": "c96096ef-ce35-4c48-9314-cf923ce04612",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "specversion": "1.0",
+      "source": "officehub",
+      "type": "request.created",
+      "time": "2026-11-09T08:42:00+07:00",
+      "taskId": null,
+      "actorMemberId": "97c2557b-189e-4b54-8c73-a89dfa40e274",
+      "actorAgentId": null,
+      "data": {
+        "requestId": "9a4cb96a-e081-4abc-9db7-287cc4fee5b1"
+      }
+    },
+    {
+      "id": "ac38348c-c325-43d1-ac15-066d931da346",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "specversion": "1.0",
+      "source": "officehub",
+      "type": "request.sent",
+      "time": "2026-11-09T08:44:00+07:00",
+      "taskId": null,
+      "actorMemberId": "97c2557b-189e-4b54-8c73-a89dfa40e274",
+      "actorAgentId": null,
+      "data": {
+        "requestId": "9a4cb96a-e081-4abc-9db7-287cc4fee5b1"
+      }
+    },
+    {
+      "id": "0f4357c7-acad-4dcd-934b-e2d80eb57961",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "specversion": "1.0",
+      "source": "officehub",
+      "type": "request.reply_drafted",
+      "time": "2026-11-09T08:50:00+07:00",
+      "taskId": null,
+      "actorMemberId": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+      "actorAgentId": "c9982750-58ec-4cd5-a025-13ce3d526962",
+      "data": {
+        "requestId": "9a4cb96a-e081-4abc-9db7-287cc4fee5b1"
+      }
+    },
+    {
+      "id": "2fc0c7b9-afc5-4cb8-b722-1d2238781fdd",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "specversion": "1.0",
+      "source": "officehub",
+      "type": "request.replied",
+      "time": "2026-11-09T08:52:00+07:00",
+      "taskId": null,
+      "actorMemberId": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+      "actorAgentId": null,
+      "data": {
+        "requestId": "9a4cb96a-e081-4abc-9db7-287cc4fee5b1"
+      }
+    },
+    {
+      "id": "84bedc4e-decb-4bb2-adf0-c7b39f53481e",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "specversion": "1.0",
+      "source": "officehub",
+      "type": "request.closed",
+      "time": "2026-11-09T09:00:00+07:00",
+      "taskId": null,
+      "actorMemberId": "97c2557b-189e-4b54-8c73-a89dfa40e274",
+      "actorAgentId": null,
+      "data": {
+        "requestId": "9a4cb96a-e081-4abc-9db7-287cc4fee5b1"
+      }
+    },
+    {
+      "id": "a0ab20f8-68b0-48a6-8698-0e190e15c945",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "specversion": "1.0",
+      "source": "officehub",
+      "type": "status.updated",
+      "time": "2026-11-09T09:12:00+07:00",
+      "taskId": "d7ab7ebd-8e38-4406-8855-4879344ef703",
+      "actorMemberId": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+      "actorAgentId": "c9982750-58ec-4cd5-a025-13ce3d526962",
+      "data": {
+        "presence": "working"
+      }
+    },
+    {
+      "id": "e33bd28b-d448-4c77-872b-65d74dffb20b",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "specversion": "1.0",
+      "source": "github",
+      "type": "ci.passed",
+      "time": "2026-11-09T09:15:00+07:00",
+      "taskId": "d7ab7ebd-8e38-4406-8855-4879344ef703",
+      "actorMemberId": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+      "actorAgentId": null,
+      "data": {
+        "number": 219
+      }
+    },
+    {
+      "id": "247e74c5-4c21-4b93-bc51-30016e12ff6b",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "specversion": "1.0",
+      "source": "officehub",
+      "type": "decision.recorded",
+      "time": "2026-11-09T09:35:00+07:00",
+      "taskId": "518b5f18-72d3-4640-9e4c-1256e8ac1dfe",
+      "actorMemberId": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+      "actorAgentId": null,
+      "data": {
+        "decisionId": "c1ca08e2-a997-4c8f-a519-a20c42594c39"
+      }
+    },
+    {
+      "id": "7570b838-67e0-4987-b0bf-f24d305e2f31",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "specversion": "1.0",
+      "source": "deploy",
+      "type": "deploy.failed",
+      "time": "2026-11-09T09:45:00+07:00",
+      "taskId": "e087283f-a8bc-4676-a6c9-8fae9cd3a7af",
+      "actorMemberId": null,
+      "actorAgentId": null,
+      "data": {
+        "env": "staging",
+        "reason": "conflict deploy/compose.yml"
+      }
+    }
+  ],
+  "requests": [
+    {
+      "id": "9a4cb96a-e081-4abc-9db7-287cc4fee5b1",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "askerId": "97c2557b-189e-4b54-8c73-a89dfa40e274",
+      "receiverId": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+      "taskId": "88e29467-1833-40f6-b074-9ce0e5e24189",
+      "title": "Server staging đang ghim tag nào?",
+      "status": "closed",
+      "dueAt": "2026-11-09T12:00:00+07:00",
+      "messages": [
+        {
+          "id": "e39f6495-c2af-4a61-827c-5c88ed66e395",
+          "requestId": "9a4cb96a-e081-4abc-9db7-287cc4fee5b1",
+          "kind": "ask",
+          "body": "Phong ơi, server staging đang ghim tag release nào? Mình cần biết để test PR #214.",
+          "authoredBy": "human",
+          "authorAgentId": null,
+          "sentById": "97c2557b-189e-4b54-8c73-a89dfa40e274",
+          "editedBeforeSend": false,
+          "createdAt": "2026-11-09T08:42:00+07:00"
+        },
+        {
+          "id": "eb9fd1dd-e93a-476c-8b7a-0e16d26d79b5",
+          "requestId": "9a4cb96a-e081-4abc-9db7-287cc4fee5b1",
+          "kind": "reply",
+          "body": "Staging đang ghim tag web-v1.8.2 (api-v2.3.0). Sau khi #214 merge sẽ đổi sang tag theo từng app.",
+          "authoredBy": "agent",
+          "authorAgentId": "c9982750-58ec-4cd5-a025-13ce3d526962",
+          "sentById": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+          "editedBeforeSend": false,
+          "createdAt": "2026-11-09T08:50:00+07:00"
+        }
+      ],
+      "createdAt": "2026-11-09T08:42:00+07:00",
+      "updatedAt": "2026-11-09T09:00:00+07:00"
+    },
+    {
+      "id": "34c08221-a382-4871-a08b-4251406d964d",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "askerId": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+      "receiverId": "97c2557b-189e-4b54-8c73-a89dfa40e274",
+      "taskId": "d7ab7ebd-8e38-4406-8855-4879344ef703",
+      "title": "Tên biến môi trường cho video-worker trên staging?",
+      "status": "sent",
+      "dueAt": "2026-11-09T08:00:00+07:00",
+      "messages": [
+        {
+          "id": "3369af6c-7174-4a58-b4d1-17df13cef44b",
+          "requestId": "34c08221-a382-4871-a08b-4251406d964d",
+          "kind": "ask",
+          "body": "Trang cho mình tên biến môi trường video-worker dùng trên staging (không gửi giá trị, chỉ tên) nhé.",
+          "authoredBy": "agent",
+          "authorAgentId": "c9982750-58ec-4cd5-a025-13ce3d526962",
+          "sentById": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+          "editedBeforeSend": true,
+          "createdAt": "2026-11-08T17:30:00+07:00"
+        }
+      ],
+      "createdAt": "2026-11-08T17:20:00+07:00",
+      "updatedAt": "2026-11-08T17:30:00+07:00"
+    },
+    {
+      "id": "5b47fd49-596d-4b96-860a-07caac67b9d0",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "askerId": "7f7870ee-bc43-47b5-84fc-001dc3081d57",
+      "receiverId": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+      "taskId": "6eafe1f7-ea97-4f3c-ada0-bbae3edce21e",
+      "title": "Cấp quyền dùng key OpenAI cho staging",
+      "status": "reply_drafted",
+      "dueAt": "2026-11-10T12:00:00+07:00",
+      "messages": [
+        {
+          "id": "e7dcbdf7-91ee-432a-9f82-4f80c9f9fb8d",
+          "requestId": "5b47fd49-596d-4b96-860a-07caac67b9d0",
+          "kind": "ask",
+          "body": "Cần key OpenAI cho TRIP-42 trên staging. Mình không cần nhận key qua chat, chỉ cần được thêm vào kho bí mật của staging.",
+          "authoredBy": "human",
+          "authorAgentId": null,
+          "sentById": "7f7870ee-bc43-47b5-84fc-001dc3081d57",
+          "editedBeforeSend": false,
+          "createdAt": "2026-11-09T08:20:00+07:00"
+        },
+        {
+          "id": "b74fe48a-4753-4753-a364-0c48c084bea7",
+          "requestId": "5b47fd49-596d-4b96-860a-07caac67b9d0",
+          "kind": "reply",
+          "body": "Đã thêm OPENAI_API_KEY vào kho bí mật staging, Bảo chỉ cần tham chiếu tên biến. Chạy lại deploy staging là có.",
+          "authoredBy": "agent",
+          "authorAgentId": "c9982750-58ec-4cd5-a025-13ce3d526962",
+          "sentById": null,
+          "editedBeforeSend": false,
+          "createdAt": "2026-11-09T09:10:00+07:00"
+        }
+      ],
+      "createdAt": "2026-11-09T08:20:00+07:00",
+      "updatedAt": "2026-11-09T09:10:00+07:00"
+    },
+    {
+      "id": "dda5d07a-0676-4e01-9915-9bd1d010bb09",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "askerId": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+      "receiverId": "7f7870ee-bc43-47b5-84fc-001dc3081d57",
+      "taskId": "c3a2d136-3280-4f75-b22d-3290b3a33ce9",
+      "title": "Cách giảm bộ đếm bình luận khi ẩn: trừ hay đếm lại?",
+      "status": "replied",
+      "dueAt": "2026-11-09T17:00:00+07:00",
+      "messages": [
+        {
+          "id": "73e84623-0b6d-4207-b8d0-414b1403f149",
+          "requestId": "dda5d07a-0676-4e01-9915-9bd1d010bb09",
+          "kind": "ask",
+          "body": "Khi ẩn bình luận, bộ đếm nên trừ 1 hay đếm lại từ DB?",
+          "authoredBy": "human",
+          "authorAgentId": null,
+          "sentById": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+          "editedBeforeSend": false,
+          "createdAt": "2026-11-09T08:10:00+07:00"
+        },
+        {
+          "id": "0397e06d-2b5e-4396-be30-105716b1ab1e",
+          "requestId": "dda5d07a-0676-4e01-9915-9bd1d010bb09",
+          "kind": "reply",
+          "body": "Trừ 1 trong transaction. Đếm lại tốn kém ở feed lớn.",
+          "authoredBy": "agent",
+          "authorAgentId": "6c423dac-94ed-469e-af9a-16d82d324a67",
+          "sentById": "7f7870ee-bc43-47b5-84fc-001dc3081d57",
+          "editedBeforeSend": true,
+          "createdAt": "2026-11-09T08:35:00+07:00"
+        },
+        {
+          "id": "fe3ac088-b83e-48f6-a390-3519bd77718c",
+          "requestId": "dda5d07a-0676-4e01-9915-9bd1d010bb09",
+          "kind": "follow_up",
+          "body": "Nếu bình luận bị ẩn rồi hiện lại thì cộng lại ở đâu?",
+          "authoredBy": "human",
+          "authorAgentId": null,
+          "sentById": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+          "editedBeforeSend": false,
+          "createdAt": "2026-11-09T09:00:00+07:00"
+        },
+        {
+          "id": "f05568c7-9ff2-4d97-892d-e3c6447e72d1",
+          "requestId": "dda5d07a-0676-4e01-9915-9bd1d010bb09",
+          "kind": "reply",
+          "body": "Cộng lại cùng transaction với thao tác hiện, có test cho cả hai chiều.",
+          "authoredBy": "human",
+          "authorAgentId": null,
+          "sentById": "7f7870ee-bc43-47b5-84fc-001dc3081d57",
+          "editedBeforeSend": false,
+          "createdAt": "2026-11-09T09:20:00+07:00"
+        }
+      ],
+      "createdAt": "2026-11-09T08:10:00+07:00",
+      "updatedAt": "2026-11-09T09:20:00+07:00"
+    },
+    {
+      "id": "e2e3ae4a-1050-4a09-89cc-f9d686fbc7ba",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "askerId": "7f7870ee-bc43-47b5-84fc-001dc3081d57",
+      "receiverId": "3c343b90-4f1b-4be5-a283-34c921c55092",
+      "taskId": "e087283f-a8bc-4676-a6c9-8fae9cd3a7af",
+      "title": "PR #221 và #219 cùng sửa deploy/compose.yml, ai rebase?",
+      "status": "draft",
+      "dueAt": null,
+      "messages": [
+        {
+          "id": "323b8e6b-9e1a-4be3-926d-66dc62561164",
+          "requestId": "e2e3ae4a-1050-4a09-89cc-f9d686fbc7ba",
+          "kind": "ask",
+          "body": "Hai PR cùng sửa deploy/compose.yml. Đề xuất #219 merge trước, #221 rebase sau. Minh đồng ý không?",
+          "authoredBy": "agent",
+          "authorAgentId": "6c423dac-94ed-469e-af9a-16d82d324a67",
+          "sentById": null,
+          "editedBeforeSend": false,
+          "createdAt": "2026-11-09T09:42:00+07:00"
+        }
+      ],
+      "createdAt": "2026-11-09T09:42:00+07:00",
+      "updatedAt": "2026-11-09T09:42:00+07:00"
+    },
+    {
+      "id": "617c49e8-c6c3-498c-ba96-69734f6fd948",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "askerId": "ed5375c3-a3b1-400c-a0c3-70593a3824e6",
+      "receiverId": "7fe8eadd-e822-4278-9780-44a6351c2d8c",
+      "taskId": "d2003a26-a89c-44fb-a344-cedffaaf96c1",
+      "title": "Test skeleton loading trên Safari",
+      "status": "cancelled",
+      "dueAt": null,
+      "messages": [
+        {
+          "id": "3c7deab5-79e4-49ef-b3ba-ab88a836a3a8",
+          "requestId": "617c49e8-c6c3-498c-ba96-69734f6fd948",
+          "kind": "ask",
+          "body": "Huy test giúp skeleton loading trên Safari iOS.",
+          "authoredBy": "human",
+          "authorAgentId": null,
+          "sentById": "ed5375c3-a3b1-400c-a0c3-70593a3824e6",
+          "editedBeforeSend": false,
+          "createdAt": "2026-11-08T15:00:00+07:00"
+        }
+      ],
+      "createdAt": "2026-11-08T14:55:00+07:00",
+      "updatedAt": "2026-11-08T15:30:00+07:00"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "c1ca08e2-a997-4c8f-a519-a20c42594c39",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "title": "Tách tag release theo từng app",
+      "body": "Mỗi app (web, api, video-worker) có tag riêng theo dạng <app>-vX.Y.Z; staging ghim tag theo app.",
+      "rationale": "Tag chung làm mỗi lần deploy một app kéo theo các app khác và khó biết server đang chạy bản nào.",
+      "decidedById": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+      "taskId": "518b5f18-72d3-4640-9e4c-1256e8ac1dfe",
+      "decidedAt": "2026-11-09T09:35:00+07:00"
+    },
+    {
+      "id": "8c530698-caa7-4c26-bc37-1e37da1818be",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "title": "Giảm bộ đếm bình luận khi ẩn bình luận",
+      "body": "Khi ẩn bình luận, trừ 1 bộ đếm trong cùng transaction; khi hiện lại thì cộng lại.",
+      "rationale": "Đếm lại từ DB tốn kém với feed lớn; trừ/cộng trong transaction vẫn nhất quán.",
+      "decidedById": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+      "taskId": "c3a2d136-3280-4f75-b22d-3290b3a33ce9",
+      "decidedAt": "2026-11-09T09:30:00+07:00"
+    },
+    {
+      "id": "fe9339cb-8fdf-46d9-a208-4ccb1fb858d0",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "title": "Một nhánh duy nhất sửa deploy/ tại một thời điểm",
+      "body": "PR sửa deploy/ phải báo trên bảng trước khi mở; #219 merge trước, #221 rebase sau.",
+      "rationale": "Nhiều nhánh cùng sửa deploy/ gây xung đột và deploy staging lỗi.",
+      "decidedById": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+      "taskId": null,
+      "decidedAt": "2026-11-09T09:50:00+07:00"
+    }
+  ],
+  "agents": [
+    {
+      "id": "c9982750-58ec-4cd5-a025-13ce3d526962",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "ownerId": "adcf8a47-7647-4b1f-952a-76723d7a3413",
+      "kind": "claude-code",
+      "label": "Claude Code của Phong",
+      "scopes": [
+        "board:read",
+        "inbox:read",
+        "status:write:self",
+        "request:draft"
+      ],
+      "tokenPrefix": "Xk3fQ9aB",
+      "revokedAt": null,
+      "lastSeenAt": "2026-11-09T09:12:00+07:00"
+    },
+    {
+      "id": "6c423dac-94ed-469e-af9a-16d82d324a67",
+      "workspaceId": "d515b602-a2be-4f07-935b-21114ae80a69",
+      "ownerId": "7f7870ee-bc43-47b5-84fc-001dc3081d57",
+      "kind": "codex",
+      "label": "Codex của Bảo",
+      "scopes": [
+        "board:read",
+        "inbox:read",
+        "request:draft"
+      ],
+      "tokenPrefix": "Pm7Zt2Lc",
+      "revokedAt": null,
+      "lastSeenAt": "2026-11-09T09:42:00+07:00"
+    }
+  ]
+}
