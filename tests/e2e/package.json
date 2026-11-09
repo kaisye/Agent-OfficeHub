@@ -1,0 +1,21 @@
+{
+  "name": "@officehub/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "pnpm run test:api && pnpm run test:ui",
+    "test:api": "vitest run --config vitest.config.ts",
+    "test:ui": "playwright test --config playwright.config.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@hono/node-server": "^2.1.6",
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^22.10.0",
+    "postgres": "^3.4.5",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
+  }
+}
