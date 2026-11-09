@@ -28,12 +28,14 @@ export interface MascotProps {
   agentBadge?: boolean;
   /** Accessible name; defaults to a Vietnamese description. Pass the member name for context. */
   title?: string;
+  /** A visible name already sits next to the mascot: hide it from screen readers. */
+  decorative?: boolean;
   className?: string;
 }
 
-export function Mascot({ mascot, presence, mood, size = 48, agentBadge, title, className }: MascotProps) {
+export function Mascot({ mascot, presence, mood, size = 48, agentBadge, title, decorative, className }: MascotProps) {
   const m: MascotMood = mood ?? (presence ? PRESENCE_TO_MOOD[presence] : "relaxed");
-  const svg = renderMascot(mascot, { mood: m, size, agentBadge, title });
+  const svg = renderMascot(mascot, { mood: m, size, agentBadge, title, decorative });
   // SVG string comes from our pure generator, which escapes the title and emits no scripts/handlers.
   return (
     <span
