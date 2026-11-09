@@ -34,23 +34,23 @@ const ago = (min: number) => new Date(Date.now() - min * 60000).toISOString();
 
 function builtinSeed(): Seed {
   const ws = randomUUID();
-  const mk = (displayName: string, login: string | null, role: "admin" | "member", areas: string[], species: Mascot["species"], palette: Mascot["palette"], accessory: Mascot["accessory"], seed: number) => ({
+  const mk = (displayName: string, login: string | null, role: "admin" | "member", areas: string[], buddy: Mascot["buddy"]) => ({
     id: randomUUID(),
     workspaceId: ws,
     displayName,
     githubLogin: login,
     role,
     areas,
-    mascot: { species, palette, accessory, seed },
+    mascot: { buddy },
   });
-  const phong = mk("Phong", "phong-tripflix", "admin", ["deploy", "backend"], "blob", "sunrise", "headphones", 11);
-  const trang = mk("Trang", "trang-tripflix", "member", ["feed", "mobile"], "cat", "ocean", "glasses", 22);
-  const bao = mk("Bảo", "bao-tripflix", "member", ["ai", "backend"], "owl", "forest", null, 33);
-  const minh = mk("Minh", "minh-tripflix", "member", ["web"], "bot", "grape", null, 44);
-  const lan = mk("Lan", "lan-tripflix", "member", ["design"], "fox", "coral", "headphones", 55);
-  const hung = mk("Hùng", "hung-tripflix", "member", ["qa"], "bear", "slate", null, 66);
-  const vy = mk("Vy", "vy-tripflix", "member", ["data"], "cat", "sand", "glasses", 77);
-  const members = [phong, trang, bao, minh, lan, hung, vy];
+  const phong = mk("Phong", "phong-tripflix", "admin", ["deploy", "backend"], "blu");
+  const trang = mk("Trang", "trang-tripflix", "member", ["feed", "mobile"], "pip");
+  const bao = mk("Bảo", "bao-tripflix", "member", ["ai", "backend"], "sage");
+  const minh = mk("Minh", "minh-tripflix", "member", ["web"], "mocha");
+  const lan = mk("Lan", "lan-tripflix", "member", ["design"], "fern");
+  const huy = mk("Huy", "huy-tripflix", "member", ["qa"], "milo");
+  const ngoc = mk("Ngọc", "ngoc-tripflix", "member", ["data"], "milo");
+  const members = [phong, trang, bao, minh, lan, huy, ngoc];
   const card = (m: { id: string }, presence: StatusCard["presence"], doing: string | null, branch: string | null, waitingOn: string[] = []) => ({
     memberId: m.id,
     presence,

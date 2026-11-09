@@ -114,7 +114,7 @@ describe("contract v0.3 shapes", () => {
     const w = await makeWorkspace("dev");
     const me = (await devMembers()).find((m) => m.id === w.alice)!;
     expect(me).toMatchObject({ displayName: "Alice", workspaceSlug: w.slug });
-    expect(me.mascot).toMatchObject({ species: "blob" });
+    expect(me.mascot).toMatchObject({ buddy: "milo" });
   });
 
   it("board events parse as HubEvent", async () => {

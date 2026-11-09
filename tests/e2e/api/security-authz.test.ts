@@ -34,7 +34,7 @@ describe("agent bearer token on EVERY human route -> 403 human_only", () => {
     ["GET", W("/agents")],
     ["POST", W("/agents"), { kind: "codex", label: "x", scopes: ["board:read"] }],
     ["DELETE", W(`/agents/${agentId}`)],
-    ["PUT", W("/me/mascot"), { species: "cat", palette: "ocean", accessory: null, seed: 1 }],
+    ["PUT", W("/me/mascot"), { buddy: "pip" }],
     ["PUT", W("/status"), { presence: "idle", doing: null, branch: null, waitingOn: [] }],
     ["GET", W("/audit")],
     ["GET", W(`/tasks/00000000-0000-4000-8000-000000000000/handoff`)],

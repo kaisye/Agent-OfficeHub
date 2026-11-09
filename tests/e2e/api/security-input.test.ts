@@ -43,9 +43,9 @@ describe("validation", () => {
     expect((await act(trang, rq.id, "draft_reply")).status).toBe(400);
     expect((await act(trang, rq.id, "unknown_action")).status).toBe(400);
   });
-  it("mascot params are strictly enum-validated (no SVG/attribute injection through the generator)", async () => {
-    const ok = { species: "cat", palette: "ocean", accessory: null, seed: 3 };
-    for (const bad of [{ ...ok, species: "dragon" }, { ...ok, palette: "<script>" }, { ...ok, accessory: 'x" onload="alert(1)' }, { ...ok, seed: -1 }, { ...ok, seed: 1.5 }, { ...ok, seed: "1" }, { species: "cat" }]) {
+  it("mascot param is strictly enum-validated (no markup injection through the buddy name)", async () => {
+    const ok = { buddy: "pip" };
+    for (const bad of [{ buddy: "dragon" }, { buddy: "<script>" }, { buddy: 'x" onload="alert(1)' }, { buddy: 1 }, { buddy: null }, {}, { species: "cat" }]) {
       expect((await api(bao, "PUT", W("/me/mascot"), bad)).status, JSON.stringify(bad)).toBe(400);
     }
     const r = await api(bao, "PUT", W("/me/mascot"), { ...ok, extra: "<svg onload=1>" });

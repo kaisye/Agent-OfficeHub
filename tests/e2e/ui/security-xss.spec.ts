@@ -58,7 +58,7 @@ test("XSS-2 hostile member display name, mascot title and webhook-sourced task t
   const db = sql();
   const name = `Ev"><img src=x onerror=window.__xss=7>`.slice(0, 60);
   const [exists] = await db`SELECT id FROM members WHERE workspace_id = ${t2.workspaceId} AND github_login = 'qa-xss'`;
-  if (!exists) await db`INSERT INTO members (workspace_id, display_name, role, mascot, github_login) VALUES (${t2.workspaceId}, ${name}, 'member', ${db.json({ species: "owl", palette: "grape", accessory: null, seed: 4 })}, 'qa-xss')`;
+  if (!exists) await db`INSERT INTO members (workspace_id, display_name, role, mascot, github_login) VALUES (${t2.workspaceId}, ${name}, 'member', ${db.json({ buddy: "sage" })}, 'qa-xss')`;
   const key = "#" + (9200 + Math.floor(Math.random() * 700));
   await db`INSERT INTO tasks (workspace_id, source, external_key, title, state, external_url) VALUES (${t2.workspaceId}, 'github_pr', ${key}, ${HOSTILE}, 'open', 'javascript:window.__xss=8') ON CONFLICT DO NOTHING`;
   const { ctx, page } = await loginAs(browser, t2.eveId, `/w/${t2.slug}`);

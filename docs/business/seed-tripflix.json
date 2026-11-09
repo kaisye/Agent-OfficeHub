@@ -24,10 +24,7 @@
         "ui"
       ],
       "mascot": {
-        "species": "fox",
-        "palette": "sunrise",
-        "accessory": "headphones",
-        "seed": 7
+        "buddy": "blu"
       }
     },
     {
@@ -41,10 +38,7 @@
         "staging"
       ],
       "mascot": {
-        "species": "cat",
-        "palette": "ocean",
-        "accessory": "glasses",
-        "seed": 21
+        "buddy": "pip"
       }
     },
     {
@@ -58,10 +52,7 @@
         "comments"
       ],
       "mascot": {
-        "species": "owl",
-        "palette": "forest",
-        "accessory": null,
-        "seed": 35
+        "buddy": "sage"
       }
     },
     {
@@ -75,10 +66,7 @@
         "deploy"
       ],
       "mascot": {
-        "species": "bear",
-        "palette": "coral",
-        "accessory": "cap",
-        "seed": 48
+        "buddy": "mocha"
       }
     },
     {
@@ -92,10 +80,7 @@
         "ui"
       ],
       "mascot": {
-        "species": "blob",
-        "palette": "grape",
-        "accessory": "cap",
-        "seed": 63
+        "buddy": "fern"
       }
     },
     {
@@ -108,10 +93,7 @@
         "qa"
       ],
       "mascot": {
-        "species": "bot",
-        "palette": "slate",
-        "accessory": null,
-        "seed": 77
+        "buddy": "milo"
       }
     },
     {
@@ -125,10 +107,7 @@
         "video-worker"
       ],
       "mascot": {
-        "species": "cat",
-        "palette": "sand",
-        "accessory": "scarf",
-        "seed": 92
+        "buddy": "milo"
       }
     }
   ],
