@@ -23,21 +23,9 @@ export class AgentRateLimiter {
     this.cfg = { any: { capacity: pm, perMinute: pm }, status: { capacity: sm, perMinute: sm }, draft: { capacity: dh, perMinute: dh / 60 } };
   }
 
-  /** Returns 0 if allowed, otherwise seconds to wait. */
-  private async take(agentId: string, kind: LimitKind): Promise<number> {
+  private take(agentId: string, kind: LimitKind): Promise<number> {
     const { capacity, perMinute } = this.cfg[kind];
-    const [r] = await appSql()`
-      INSERT INTO rate_buckets AS b (key, tokens, updated_at, last_ok)
-      VALUES (${`${agentId}:${kind}`}, ${capacity - 1}, now(), ${capacity >= 1})
-      ON CONFLICT (key) DO UPDATE SET
-        tokens = CASE WHEN LEAST(${capacity}::float8, b.tokens + extract(epoch FROM (now() - b.updated_at)) / 60 * ${perMinute}::float8) >= 1
-                      THEN LEAST(${capacity}::float8, b.tokens + extract(epoch FROM (now() - b.updated_at)) / 60 * ${perMinute}::float8) - 1
-                      ELSE LEAST(${capacity}::float8, b.tokens + extract(epoch FROM (now() - b.updated_at)) / 60 * ${perMinute}::float8) END,
-        last_ok = LEAST(${capacity}::float8, b.tokens + extract(epoch FROM (now() - b.updated_at)) / 60 * ${perMinute}::float8) >= 1,
-        updated_at = now()
-      RETURNING tokens, last_ok`;
-    if (r!.last_ok) return 0;
-    return Math.max(1, Math.ceil(((1 - Number(r!.tokens)) / perMinute) * 60));
+    return takeToken(`${agentId}:${kind}`, capacity, perMinute);
   }
 
   /** @returns 0 when allowed, else retry-after seconds. */
@@ -48,4 +36,23 @@ export class AgentRateLimiter {
     if (kind === "draft") return this.take(agentId, "draft");
     return 0;
   }
+}
+
+/**
+ * Generic shared bucket (same table, same atomic upsert). Also used for human auth throttling
+ * (keys "login:ip:…", "login:email:…", "invite:ip:…"). Returns 0 if allowed, otherwise seconds to wait.
+ */
+export async function takeToken(key: string, capacity: number, perMinute: number): Promise<number> {
+  const [r] = await appSql()`
+    INSERT INTO rate_buckets AS b (key, tokens, updated_at, last_ok)
+    VALUES (${key}, ${capacity - 1}, now(), ${capacity >= 1})
+    ON CONFLICT (key) DO UPDATE SET
+      tokens = CASE WHEN LEAST(${capacity}::float8, b.tokens + extract(epoch FROM (now() - b.updated_at)) / 60 * ${perMinute}::float8) >= 1
+                    THEN LEAST(${capacity}::float8, b.tokens + extract(epoch FROM (now() - b.updated_at)) / 60 * ${perMinute}::float8) - 1
+                    ELSE LEAST(${capacity}::float8, b.tokens + extract(epoch FROM (now() - b.updated_at)) / 60 * ${perMinute}::float8) END,
+      last_ok = LEAST(${capacity}::float8, b.tokens + extract(epoch FROM (now() - b.updated_at)) / 60 * ${perMinute}::float8) >= 1,
+      updated_at = now()
+    RETURNING tokens, last_ok`;
+  if (r!.last_ok) return 0;
+  return Math.max(1, Math.ceil(((1 - Number(r!.tokens)) / perMinute) * 60));
 }

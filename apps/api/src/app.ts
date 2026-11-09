@@ -4,6 +4,7 @@ import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { streamSSE } from "hono/streaming";
+import { getConnInfo } from "@hono/node-server/conninfo";
 import { ZodError, type z } from "zod";
 import { ChangeMessage as ChangeMessageSchema, Id, Routes } from "@officehub/shared";
 import {
@@ -44,6 +45,13 @@ import {
   withWorkspace,
   actorOf,
   type Principal,
+  acceptInvite,
+  changePassword,
+  createInvite,
+  hashToken,
+  inviteInfo,
+  passwordLogin,
+  takeToken,
 } from "@officehub/db";
 import { loadConfig, type ApiConfig } from "./config.js";
 import { ChangeHub } from "./sse.js";
@@ -174,6 +182,41 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
     return c.json(await meBody({ kind: "human", workspaceId: m.workspaceId, memberId: m.id, role: m.role }));
   });
 
+  /* ---------------- password login via invite links (v0.5) ---------------- */
+  const clientIp = (c: Context) => {
+    try {
+      return getConnInfo(c).remote.address ?? "unknown";
+    } catch {
+      return "unknown";
+    }
+  };
+  async function throttle(key: string, capacity: number, perMinute: number) {
+    const wait = await takeToken(key, capacity, perMinute);
+    if (wait) throw new HubError("rate_limited", `Thử lại sau ${wait} giây`, 429);
+  }
+
+  app.post("/auth/login", async (c) => {
+    const { email, password } = await parseBody(c, Routes.passwordLogin.body);
+    await throttle(`login:ip:${clientIp(c)}`, 10, 10); // 10/min per IP
+    await throttle(`login:email:${email}`, 5, 1 / 3); // 5 tries, then 1 per 3 min per email
+    const h = await passwordLogin(email, password);
+    await startSession(c, h.workspaceId, h.memberId);
+    return c.json(await meBody({ kind: "human", ...h }));
+  });
+
+  app.get("/auth/invite/:token", async (c) => {
+    await throttle(`invite:ip:${clientIp(c)}`, 20, 10);
+    return c.json(await inviteInfo(c.req.param("token")));
+  });
+
+  app.post("/auth/invite/accept", async (c) => {
+    const { token, email, password } = await parseBody(c, Routes.acceptInvite.body);
+    await throttle(`invite:ip:${clientIp(c)}`, 20, 10);
+    const m = await acceptInvite(token, email, password);
+    await startSession(c, m.workspaceId, m.id);
+    return c.json(await meBody({ kind: "human", workspaceId: m.workspaceId, memberId: m.id, role: m.role }));
+  });
+
   // Dev login picker: only when DEV_LOGIN_ENABLED=true (otherwise indistinguishable from an unknown route).
   app.get("/auth/dev-members", async (c) => {
     if (!config.devLoginEnabled) throw new HubError("not_found", "Not found", 404);
@@ -261,6 +304,18 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
   const H = (c: Context) => c.get("human") as Human;
 
   app.get("/w/:slug/board", async (c) => c.json(await getBoard(H(c))));
+
+  app.post("/w/:slug/members/:id/invite", async (c) => {
+    const id = Id.safeParse(c.req.param("id"));
+    if (!id.success) throw new HubError("validation_failed", "Bad member id", 400);
+    return c.json(await createInvite(H(c), id.data, config.webOrigin));
+  });
+
+  app.post("/w/:slug/me/password", async (c) => {
+    const { current, next } = await parseBody(c, Routes.changePassword.body);
+    await changePassword(H(c), current, next, hashToken(getCookie(c, SESSION_COOKIE) ?? ""));
+    return c.json({ ok: true as const });
+  });
 
   app.get("/w/:slug/stream", (c) => {
     const h = H(c);

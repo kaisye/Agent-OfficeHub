@@ -71,6 +71,12 @@ export const ChangeMessage = z.object({ kind: ChangeKind, id: z.string() });
 
 const Ok = z.object({ ok: z.literal(true) });
 
+/** Credential rules shared by server and web forms. */
+export const Password = {
+  email: z.string().trim().toLowerCase().email().max(200),
+  password: z.string().min(10, "Mật khẩu cần ít nhất 10 ký tự").max(200),
+};
+
 export const Routes = {
   // session
   devLogin: { method: "POST", path: "/auth/dev-login", body: z.object({ memberId: Id }), res: Me },
@@ -82,6 +88,39 @@ export const Routes = {
   },
   githubLogin: { method: "GET", path: "/auth/github" },
   me: { method: "GET", path: "/me", res: Me },
+
+  // Password login via one-time invite links (v0.5) — no GitHub or email service needed.
+  /** Admin only. Creates a single-use link (48h) for that member; any older unused link for them is revoked. */
+  inviteMember: {
+    method: "POST",
+    path: "/w/:slug/members/:id/invite",
+    res: z.object({ url: z.string().url(), expiresAt: z.string().datetime({ offset: true }) }),
+  },
+  /** Public. 404 when the token is unknown, used or expired. */
+  inviteInfo: {
+    method: "GET",
+    path: "/auth/invite/:token",
+    res: z.object({ displayName: z.string(), workspaceName: z.string(), mascot: Member.shape.mascot, email: z.string().nullable() }),
+  },
+  /** Public. Sets the member's email + password, burns the invite, starts a session. */
+  acceptInvite: {
+    method: "POST",
+    path: "/auth/invite/accept",
+    body: z.object({ token: z.string().min(20).max(200), email: Password.email, password: Password.password }),
+    res: Me,
+  },
+  passwordLogin: {
+    method: "POST",
+    path: "/auth/login",
+    body: z.object({ email: Password.email, password: z.string().min(1).max(200) }),
+    res: Me,
+  },
+  changePassword: {
+    method: "POST",
+    path: "/w/:slug/me/password",
+    body: z.object({ current: z.string().min(1).max(200), next: Password.password }),
+    res: Ok, // other sessions of this member are signed out
+  },
   logout: { method: "POST", path: "/auth/logout" },
 
   // board (human)

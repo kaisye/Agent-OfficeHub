@@ -12,3 +12,4 @@ export { migrate } from "./migrate.js";
 export { seed } from "./seed.js";
 export * from "./untrusted.js";
 export * from "./reminders.js";
+export * from "./passwords.js";
