@@ -9,6 +9,7 @@ import {
   type Decision,
   type HubEvent,
   type Id,
+  type Me,
   type Member,
   type Request,
   type RequestAction,
@@ -205,8 +206,14 @@ export class MockServer {
   }
 
   /* ----- reads */
-  getMe(viewerId: Id) {
-    return { ...this.member(viewerId) };
+  getMe(viewerId: Id): Me {
+    return { ...this.member(viewerId), workspaceSlug: this.workspace.slug, workspaceName: this.workspace.name };
+  }
+
+  getRequest(slug: string, id: Id, viewerId: Id): Request {
+    this.checkSlug(slug);
+    this.member(viewerId);
+    return structuredClone(this.view(this.findRequest(id, viewerId), viewerId));
   }
 
   getBoard(slug: string, viewerId: Id): Board {
@@ -244,7 +251,7 @@ export class MockServer {
   markRead(slug: string, id: Id, viewerId: Id) {
     this.checkSlug(slug);
     this.findRequest(id, viewerId);
-    if (this.unread.delete(`${viewerId}:${id}`)) this.emit(slug, { kind: "inbox", id });
+    if (this.unread.delete(`${viewerId}:${id}`)) this.emit(slug, { kind: "request", id });
   }
 
   /* ----- status / mascot */
@@ -266,7 +273,7 @@ export class MockServer {
     const i = this.cards.findIndex((c) => c.memberId === viewerId);
     if (i >= 0) this.cards[i] = card;
     else this.cards.push(card);
-    this.emit(slug, { kind: "status", id: viewerId });
+    this.emit(slug, { kind: "card", id: viewerId });
   }
 
   updateMyMascot(slug: string, viewerId: Id, input: MascotInput) {
@@ -574,6 +581,40 @@ export class MockServer {
     };
   }
 
+  /* ----- demo: other people (mock mode only) */
+  /**
+   * Makes a random member other than `viewerId` do something visible: change presence, or answer a
+   * request the viewer asked. Returns a one-line description for the dev control.
+   */
+  simulateTeammate(slug: string, viewerId: Id, rnd: () => number = Math.random): string {
+    this.checkSlug(slug);
+    const others = this.members.filter((m) => m.id !== viewerId);
+    const pick = <T,>(xs: T[]): T => xs[Math.floor(rnd() * xs.length)]!;
+    const replyable = this.requests.filter(
+      (r) => r.askerId === viewerId && (r.status === "sent" || r.status === "reply_drafted") && others.some((m) => m.id === r.receiverId),
+    );
+    if (replyable.length > 0 && rnd() < 0.4) {
+      const r = pick(replyable);
+      const who = this.member(r.receiverId);
+      this.actOnRequest(slug, r.id, who.id, { action: "send_reply", body: "Mình xem rồi, đây là câu trả lời: ổn, bạn cứ tiến hành nhé." });
+      return `${who.displayName} vừa trả lời "${r.title}".`;
+    }
+    const who = pick(others);
+    const prev = this.cards.find((c) => c.memberId === who.id);
+    const options: { presence: UpdateStatusInput["presence"]; doing: string | null; waitOn: boolean }[] = [
+      { presence: "working", doing: "Đang code tiếp tính năng mới", waitOn: false },
+      { presence: "blocked", doing: "Bị kẹt, cần người xem giúp", waitOn: true },
+      { presence: "waiting", doing: "Chờ phản hồi để đi tiếp", waitOn: true },
+      { presence: "reviewing", doing: "Đang review pull request", waitOn: false },
+      { presence: "idle", doing: null, waitOn: false },
+      { presence: "offline", doing: null, waitOn: false },
+    ];
+    const o = pick(options.filter((x) => x.presence !== prev?.presence));
+    const waitingOn = o.waitOn ? [pick(this.members.filter((m) => m.id !== who.id)).id] : [];
+    this.updateMyStatus(slug, who.id, { presence: o.presence, doing: o.doing, branch: prev?.branch ?? null, waitingOn });
+    return `${who.displayName} chuyển sang "${o.presence}".`;
+  }
+
   /* ----- realtime */
   subscribe(slug: string, fn: Listener) {
     const l = { slug, fn };
@@ -634,6 +675,11 @@ export function createMockClient(opts: MockClientOptions = {}): ApiClient & { se
     server,
     mode: "mock",
     me: () => run((v) => server.getMe(v)),
+    devMembers: () =>
+      server.delay(() =>
+        server.members.map((m) => ({ id: m.id, displayName: m.displayName, workspaceSlug: server.workspace.slug, mascot: m.mascot })),
+      ),
+    getRequest: (slug, id) => run((v) => server.getRequest(slug, id, v)),
     devLogin: (memberId) =>
       server.delay(() => {
         if (!server.members.some((m) => m.id === memberId)) throw err("not_found", "Không có thành viên này.", 404);

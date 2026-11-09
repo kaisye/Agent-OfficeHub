@@ -26,9 +26,26 @@ NEXT_PUBLIC_API_MODE=http NEXT_PUBLIC_API_URL=http://localhost:8787 pnpm --filte
 Env: see `.env.example` (`NEXT_PUBLIC_API_MODE`, `_API_URL`, `_DEFAULT_WORKSPACE`, `_DEV_LOGIN`, `_MCP_URL`). Mock data resets on reload; only the session (member id) persists in localStorage.
 Tests: `pnpm --filter @officehub/web test` (22 tests: mock rules + component interaction). Screenshots: `apps/web/screenshots/`.
 
+## Round 2 (contract v0.3)
+- Workspace slug now comes from `Me` (`/me`); `/` redirects to `/w/<me.workspaceSlug>`, a wrong slug in the URL is corrected. `NEXT_PUBLIC_DEFAULT_WORKSPACE` is only a mock-mode fallback (`FALLBACK_SLUG`).
+- Login picker uses `Routes.devMembers` in http mode (mock: seed members via the mock client). `/dev-login` and login send you to `/` after sign-in.
+- Request detail uses `getRequest` (`useRequest`, key `["request", slug, id]`).
+- SSE: `ChangeMessage` is parsed with zod; kind -> queries in `keysForChange` (`lib/hooks.ts`); an unparseable message refreshes everything (`kind: "all"`).
+- Requests list: the kit's inline composer clears itself on submit, so a rejected body (e.g. `secret_detected`) is kept in a "Chưa gửi được" panel under the card (editable, retry/dismiss).
+- Token reveal: snippets live in `lib/agent-snippets.ts` only (`.mcp.json` with `${OFFICEHUB_AGENT_TOKEN}`, `export` line, hooks for SessionStart + UserPromptSubmit using `npx tsx /ABS/PATH/TO/apps/agent-hooks/src/cli.ts <event>`, from `docs/tech/agent-setup.md`). Edit `HOOK_COMMAND` there if Backend changes it.
+- Board: own unsent drafts under "Nháp agent chờ bạn gửi" inside "Cần bạn xử lý"; presence changes play a pop/glow (`PulseOnChange`, `.oh-pulse`, disabled for reduced motion) on member cards and the "Ai đang chờ ai" strip. Checked at 1440/1024/768/390.
+- Mock mode: "Giả lập đồng đội" button (board header; mock mode + `NEXT_PUBLIC_DEV_LOGIN`/dev builds) calls `MockServer.simulateTeammate`: a random other member changes presence or answers a request you asked.
+- Merged Design round 2: removed the `--color-oh-surface-2` alias, `surface2` -> `surface-2`; RequestCard `detailHref`/`linkAs`; app icons (`app/icon.svg`, `app/apple-icon.png`); `Mascot decorative` next to visible names.
+- Tests: 30 (added `test/round2.test.ts`). Screenshots in `screenshots/` (mock mode, port 3100).
+
+## Workarounds kept until safe to delete
+- `lib/use-stable.ts` / `useStableCallback` around Dialog `onClose` (agents, decisions, new request, action runner): harmless now that Dialog uses a ref; remove later.
+- Local components that overlap kit candidates: thread in `request-detail.tsx`, `components/form.tsx`, top nav, tabs.
+- "Chưa gửi được" panel in the requests list: obsolete if the kit's RequestCard keeps text when the action fails.
+- `needsMe` adds own drafts from `board.openRequests` (inbox excludes them): keep unless Backend includes them.
+
 ## Known gaps
-- Mock data is per tab and not shared across tabs; no simulated "other users" activity, so realtime is only visible for own actions.
-- In the requests list, `RequestCard`'s inline composer clears typed text on submit; if the server rejects it (e.g. secret) the text is lost. Detail page keeps the text.
+- Mock data is per tab and not shared across tabs; other users are simulated only through the dev button.
 - No draft editing route exists, so "Sửa" sends the edited text with `send` / `send_reply` (body optional rule).
 - Overdue reminder UI is the "Quá hạn" badge only (REQ-10 reminders are server-side). No P1/P2 stories (invites, filters, Jira, audit view, token rotation).
 - Hook snippet path (`./apps/agent-hooks/dist/session-start.js`) and env names are assumptions.

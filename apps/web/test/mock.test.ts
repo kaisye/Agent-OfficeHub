@@ -256,7 +256,7 @@ describe("mock client: decisions, agents, status, realtime", () => {
     await api.updateMyStatus(S, { presence: "working", doing: "Vẽ icon", branch: "feat/icons", waitingOn: [BAO] });
     await Promise.resolve();
     off();
-    expect(seen).toContain("status");
+    expect(seen).toContain("card");
     const card = (await api.board(S)).cards.find((c) => c.memberId === LAN)!;
     expect(card).toMatchObject({ presence: "working", doing: "Vẽ icon", waitingOn: [BAO], updatedBy: "human" });
   });

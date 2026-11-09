@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Badge, Button, Card, Dialog, EmptyState, Icon, TokenRevealOnce, relativeTimeVi, useToast } from "@officehub/ui";
 import { AgentKind, AgentScope, type Agent } from "@officehub/shared";
-import { MCP_URL } from "@/lib/api";
+import { exportEnvLine, hookEnvNote, hookJson, mcpJson } from "@/lib/agent-snippets";
 import { errorMessage } from "@/lib/errors";
 import { useAgents, useCreateAgent, useRevokeAgent } from "@/lib/hooks";
 import { useStableCallback } from "@/lib/use-stable";
@@ -24,21 +24,6 @@ export const SCOPE_INFO: Record<AgentScope, { title: string; help: string }> = {
   "status:write:self": { title: "Cập nhật thẻ của bạn", help: "Đổi dòng 'đang làm gì' và nhánh trên thẻ của bạn. Thẻ hiện nhãn 'Agent cập nhật hộ'." },
   "request:draft": { title: "Soạn nháp yêu cầu và trả lời", help: "Chỉ soạn nháp. Gửi, chấp nhận, hủy luôn là bạn bấm." },
 };
-
-export function mcpJson(token: string) {
-  return JSON.stringify({ mcpServers: { "office-hub": { type: "http", url: MCP_URL, headers: { Authorization: `Bearer ${token}` } } } }, null, 2);
-}
-export function hookJson() {
-  return JSON.stringify(
-    {
-      hooks: {
-        SessionStart: [{ hooks: [{ type: "command", command: `OFFICEHUB_MCP_URL=${MCP_URL} OFFICEHUB_TOKEN="$OFFICEHUB_AGENT_TOKEN" node ./apps/agent-hooks/dist/session-start.js` }] }],
-      },
-    },
-    null,
-    2,
-  );
-}
 
 export function AgentsScreen() {
   const { slug, me } = useWorkspace();
@@ -230,9 +215,10 @@ function RevealPanel({ data, onDone }: { data: { agent: Agent; token: string }; 
       <TokenRevealOnce token={data.token} agentLabel={data.agent.label} onDone={onDone} />
       <Card className="space-y-4">
         <h2 className="text-oh-lg font-semibold">Nối vào Claude Code</h2>
-        <p className="text-oh-sm text-oh-ink-muted">Hai đoạn dưới đã điền sẵn. Chỉ hiện lúc này, vì chứa token.</p>
-        <CodeBlock title="1. .mcp.json (đặt ở thư mục dự án)" text={mcpJson(data.token)} />
-        <CodeBlock title="2. Hook mở phiên, chèn yêu cầu chưa đọc (.claude/settings.json)" text={hookJson()} note={`Đặt biến môi trường OFFICEHUB_AGENT_TOKEN bằng token trên, đừng ghi token vào file.`} />
+        <p className="text-oh-sm text-oh-ink-muted">Token chỉ hiện lúc này. Đặt nó vào biến môi trường, đừng ghi vào file trong repo.</p>
+        <CodeBlock title="1. Đặt token vào môi trường (terminal)" text={exportEnvLine(data.token)} />
+        <CodeBlock title="2. .mcp.json (đặt ở thư mục dự án)" text={mcpJson()} note="Claude Code tự thay ${OFFICEHUB_AGENT_TOKEN} bằng biến môi trường ở bước 1." />
+        <CodeBlock title="3. Hook chèn yêu cầu chưa đọc khi mở phiên và mỗi lần bạn gõ (.claude/settings.json)" text={hookJson()} note={hookEnvNote} />
       </Card>
     </section>
   );

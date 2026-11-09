@@ -3,18 +3,23 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button, Icon, Mascot, useToast } from "@officehub/ui";
-import { API_MODE, DEFAULT_SLUG, SEED_MEMBERS, SHOW_DEV_LOGIN, getApi } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { API_MODE, SEED_MEMBERS, SHOW_DEV_LOGIN, getApi } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
 import { safeNext } from "@/lib/nav";
 
-const HERO = SEED_MEMBERS.find((m) => m.displayName === "Phong")?.mascot ?? SEED_MEMBERS[0]!.mascot;
+const SEED_HERO = SEED_MEMBERS.find((m) => m.displayName === "Phong")?.mascot ?? SEED_MEMBERS[0]!.mascot;
 
 export function LoginScreen() {
   const router = useRouter();
   const params = useSearchParams();
   const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
-  const next = safeNext(params.get("next"), `/w/${DEFAULT_SLUG}`);
+  const next = safeNext(params.get("next"), "/");
+  // http: GET /auth/dev-members (only exists when DEV_LOGIN_ENABLED); mock: the seed members.
+  const devMembers = useQuery({ queryKey: ["devMembers"], queryFn: () => getApi().devMembers(), enabled: SHOW_DEV_LOGIN, retry: false });
+  const list = devMembers.data ?? [];
+  const HERO = list.find((m) => m.displayName === "Phong")?.mascot ?? list[0]?.mascot ?? SEED_HERO;
 
   const github = () => {
     if (API_MODE === "mock") {
@@ -63,23 +68,31 @@ export function LoginScreen() {
           <p className="mt-1 text-oh-sm text-oh-ink-muted">
             {API_MODE === "mock" ? "Dữ liệu mô phỏng Tripflix, nằm trong trình duyệt." : "Đăng nhập nhanh qua dev-login của API."}
           </p>
-          <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-            {SEED_MEMBERS.map((m) => (
-              <li key={m.id}>
-                <button
-                  type="button"
-                  disabled={busy !== null}
-                  onClick={() => devLogin(m.id)}
-                  aria-label={`Đăng nhập là ${m.displayName}`}
-                  className="flex w-full flex-col items-center gap-1 rounded-oh-lg border border-oh-border bg-oh-bg p-3 transition-shadow hover:shadow-oh-md focus-visible:outline-3 focus-visible:outline-oh-focus disabled:opacity-60"
-                >
-                  <Mascot mascot={m.mascot} mood="relaxed" size={48} title={m.displayName} />
-                  <span className="text-oh-sm font-medium">{m.displayName}</span>
-                  <span className="text-oh-xs text-oh-ink-muted">{m.role === "admin" ? "Quản trị" : m.areas.slice(0, 2).join(", ")}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          {devMembers.isPending ? (
+            <p role="status" className="mt-4 text-oh-sm text-oh-ink-muted">Đang tải danh sách…</p>
+          ) : devMembers.isError ? (
+            <p role="alert" className="mt-4 text-oh-sm text-oh-danger-soft-fg">
+              Chưa lấy được danh sách thành viên. Đăng nhập nhanh chỉ có khi API bật DEV_LOGIN_ENABLED.
+            </p>
+          ) : (
+            <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+              {list.map((m) => (
+                <li key={m.id}>
+                  <button
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() => devLogin(m.id)}
+                    aria-label={`Đăng nhập là ${m.displayName}`}
+                    className="flex w-full flex-col items-center gap-1 rounded-oh-lg border border-oh-border bg-oh-bg p-3 transition-shadow hover:shadow-oh-md focus-visible:outline-3 focus-visible:outline-oh-focus disabled:opacity-60"
+                  >
+                    <Mascot mascot={m.mascot} mood="relaxed" size={48} decorative />
+                    <span className="text-oh-sm font-medium">{m.displayName}</span>
+                    <span className="text-oh-xs text-oh-ink-muted">{m.workspaceSlug}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       )}
     </main>

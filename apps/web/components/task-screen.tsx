@@ -67,7 +67,7 @@ export function TaskScreen() {
         <div className="flex flex-wrap items-center gap-3">
           <TaskChip task={task} />
           <span className="inline-flex items-center gap-1.5 text-oh-sm text-oh-ink-muted">
-            {owner && <Mascot mascot={owner.mascot} mood="relaxed" size={24} title={owner.displayName} />}
+            {owner && <Mascot mascot={owner.mascot} mood="relaxed" size={24} decorative />}
             {owner ? `${owner.displayName} phụ trách` : "Chưa giao ai"}
           </span>
           {task.syncedAt && <span className="text-oh-xs text-oh-ink-muted">Đồng bộ {relativeTimeVi(task.syncedAt)}</span>}
@@ -116,7 +116,7 @@ export function TaskScreen() {
                   return (
                     <li key={r.id}>
                       <Link href={`/w/${slug}/requests/${r.id}`} className="flex items-center gap-2 rounded-oh-lg border border-oh-border bg-oh-surface p-2.5 hover:shadow-oh-md focus-visible:outline-3 focus-visible:outline-oh-focus">
-                        {other && <Mascot mascot={other.mascot} mood="relaxed" size={32} title={other.displayName} />}
+                        {other && <Mascot mascot={other.mascot} mood="relaxed" size={32} decorative />}
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-oh-sm font-medium">{r.title}</span>
                           <span className="text-oh-xs text-oh-ink-muted">{label}</span>

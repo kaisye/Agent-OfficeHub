@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type KeyboardEvent } from "react";
-import { Badge, Button, EmptyState, RequestCard, cn } from "@officehub/ui";
-import type { Request } from "@officehub/shared";
+import { ACTION_LABEL_VI, Badge, Button, EmptyState, RequestCard, cn } from "@officehub/ui";
+import type { Request, RequestAction } from "@officehub/shared";
 import { useBoard, useInbox, useRequests } from "@/lib/hooks";
 import { memberMap, needsMe } from "@/lib/requests";
+import { errorMessage } from "@/lib/errors";
 import { useActionRunner } from "./action-runner";
+import { Field, TextArea } from "./form";
 import { NewRequestDialog } from "./new-request-dialog";
 import { ListSkeleton } from "./skeletons";
 import { useWorkspace } from "./workspace";
@@ -29,7 +31,16 @@ export function RequestsScreen() {
   const all = useRequests(slug);
   const [creating, setCreating] = useState(false);
   const members = board.data?.members ?? [];
-  const runner = useActionRunner(slug, members, me.id);
+  // Text the server rejected (e.g. secret_detected). The card's inline composer clears itself on submit,
+  // so we keep the text here, under the card, until it is sent or dismissed.
+  const [failed, setFailed] = useState<Record<string, FailedBody>>({});
+  const runner = useActionRunner(
+    slug,
+    members,
+    me.id,
+    (_a, r) => setFailed(({ [r.id]: _gone, ...rest }) => rest),
+    (f, e) => setFailed((cur) => ({ ...cur, [f.request.id]: { action: f.action, request: f.request, body: f.body, message: errorMessage(e) } })),
+  );
 
   const mine = needsMe(inbox.data, board.data, me.id);
   const list: Request[] =
@@ -105,17 +116,19 @@ export function RequestsScreen() {
                     asker={asker}
                     receiver={receiver}
                     viewerMemberId={me.id}
+                    detailHref={`/w/${slug}/requests/${r.id}`}
+                    linkAs={Link}
                     onAction={runner.handle}
                     onEditDraft={() => router.push(`/w/${slug}/requests/${r.id}?edit=1`)}
                   />
-                  <div className="px-1">
-                    <Link
-                      href={`/w/${slug}/requests/${r.id}`}
-                      className="text-oh-sm font-medium underline-offset-2 hover:underline focus-visible:outline-3 focus-visible:outline-oh-focus"
-                    >
-                      Mở chi tiết và chuỗi trao đổi
-                    </Link>
-                  </div>
+                  {failed[r.id] && (
+                    <FailedBodyPanel
+                      failed={failed[r.id]!}
+                      onChange={(body) => setFailed((cur) => ({ ...cur, [r.id]: { ...cur[r.id]!, body } }))}
+                      onRetry={() => runner.handle(failed[r.id]!.action, r, failed[r.id]!.body.trim())}
+                      onDismiss={() => setFailed(({ [r.id]: _gone, ...rest }) => rest)}
+                    />
+                  )}
                 </li>
               );
             })}
@@ -125,6 +138,36 @@ export function RequestsScreen() {
 
       {runner.dialog}
       <NewRequestDialog open={creating} onClose={() => setCreating(false)} slug={slug} members={members} tasks={board.data?.tasks ?? []} meId={me.id} />
+    </div>
+  );
+}
+
+interface FailedBody {
+  action: RequestAction;
+  request: Request;
+  body: string;
+  message: string;
+}
+
+function FailedBodyPanel({ failed, onChange, onRetry, onDismiss }: { failed: FailedBody; onChange: (v: string) => void; onRetry: () => void; onDismiss: () => void }) {
+  const id = `failed-${failed.request.id}`;
+  return (
+    <div role="group" aria-labelledby={`${id}-h`} className="space-y-2 rounded-oh-lg border border-oh-danger bg-oh-danger-soft p-3 text-oh-danger-soft-fg">
+      <p id={`${id}-h`} className="text-oh-sm font-medium">
+        Chưa gửi được. Mình giữ nguyên nội dung của bạn, sửa rồi gửi lại nhé.
+      </p>
+      <p className="text-oh-xs">{failed.message}</p>
+      <Field label="Nội dung của bạn">
+        {(fid) => <TextArea id={fid} rows={3} value={failed.body} onChange={(e) => onChange(e.target.value)} />}
+      </Field>
+      <div className="flex gap-2">
+        <Button variant="ghost" size="sm" onClick={onDismiss}>
+          Bỏ nội dung
+        </Button>
+        <Button variant="primary" size="sm" disabled={!failed.body.trim()} onClick={onRetry}>
+          {ACTION_LABEL_VI[failed.action]}
+        </Button>
+      </div>
     </div>
   );
 }

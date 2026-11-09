@@ -19,7 +19,8 @@ import {
   requestStatusText,
 } from "@officehub/ui";
 import { bodyRequirement, canSeeMessage, type Actor, type Member, type Request, type RequestAction, type RequestMessage } from "@officehub/shared";
-import { useBoard, useMarkRead, useRequests } from "@/lib/hooks";
+import { isApiError } from "@/lib/api";
+import { useBoard, useMarkRead, useRequest } from "@/lib/hooks";
 import { memberMap } from "@/lib/requests";
 import { useActionRunner } from "./action-runner";
 import { TextArea } from "./form";
@@ -32,9 +33,9 @@ export function RequestDetail() {
   const { id } = useParams<{ id: string }>();
   const { slug, me } = useWorkspace();
   const board = useBoard(slug);
-  const requests = useRequests(slug);
+  const found = useRequest(slug, id);
   const markRead = useMarkRead(slug);
-  const request = requests.data?.find((r) => r.id === id);
+  const request = found.data;
 
   // Mark read on open (once per unread request).
   const marked = useRef<string | null>(null);
@@ -45,7 +46,17 @@ export function RequestDetail() {
     }
   }, [request?.id, request?.unreadForViewer, markRead]);
 
-  if (!board.data || !requests.data) return <ListSkeleton rows={2} label="Đang tải yêu cầu…" />;
+  if (found.isError && !(isApiError(found.error) && found.error.code === "not_found")) {
+    return (
+      <EmptyState
+        title="Chưa tải được yêu cầu"
+        mood="worried"
+        description="Chưa kết nối được. Thử lại sau nhé."
+        action={<Button onClick={() => void found.refetch()}>Thử lại</Button>}
+      />
+    );
+  }
+  if (!board.data || (!request && !found.isError)) return <ListSkeleton rows={2} label="Đang tải yêu cầu…" />;
   if (!request) {
     return (
       <EmptyState
@@ -157,10 +168,10 @@ function Thread({
         <p className="text-oh-sm text-oh-ink-muted">{help}</p>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-oh-sm">
           <span className="inline-flex items-center gap-2">
-            <Mascot mascot={asker.mascot} mood="relaxed" size={32} title={asker.displayName} />
+            <Mascot mascot={asker.mascot} mood="relaxed" size={32} decorative />
             <b>{asker.displayName}</b>
             <Icon name="reply" size={14} className="rotate-180 text-oh-ink-muted" />
-            <Mascot mascot={receiver.mascot} mood="relaxed" size={32} title={receiver.displayName} />
+            <Mascot mascot={receiver.mascot} mood="relaxed" size={32} decorative />
             <b>{receiver.displayName}</b>
           </span>
           {request.dueAt && <span className="text-oh-ink-muted">Hạn {new Date(request.dueAt).toLocaleDateString("vi-VN")}</span>}

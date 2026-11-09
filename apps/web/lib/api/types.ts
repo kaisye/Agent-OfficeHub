@@ -3,8 +3,9 @@ import type {
   Agent,
   Board,
   Decision,
+  ChangeKind,
   Id,
-  Member,
+  Me,
   Request,
   RequestAction,
   Routes,
@@ -22,17 +23,22 @@ export type RecordDecisionInput = Body<"recordDecision">;
 export type CreateAgentInput = Body<"createAgent">;
 export type ActInput = { action: RequestAction; body?: string };
 
-export type ChangeKind = string;
+export type { ChangeKind, Me };
+/** A server "change" message. `all` is the client-side fallback for an unparseable message: refresh everything. */
 export interface ChangeEvent {
-  kind: ChangeKind;
+  kind: ChangeKind | "all";
   id: string | null;
 }
+
+export type DevMember = z.infer<(typeof Routes)["devMembers"]["res"]>[number];
 
 /** One interface, two implementations (http | mock). All calls are scoped by workspace slug. */
 export interface ApiClient {
   readonly mode: "http" | "mock";
   // session
-  me(): Promise<Member>;
+  me(): Promise<Me>;
+  /** Dev login picker (http: GET /auth/dev-members; mock: the seed members). */
+  devMembers(): Promise<DevMember[]>;
   devLogin(memberId: Id): Promise<void>;
   /** Where the "Đăng nhập bằng GitHub" button sends the browser. */
   githubLoginUrl(): string;
@@ -45,6 +51,7 @@ export interface ApiClient {
   listRequests(slug: string): Promise<Request[]>;
   createRequest(slug: string, input: CreateRequestInput): Promise<Request>;
   actOnRequest(slug: string, id: Id, input: ActInput): Promise<Request>;
+  getRequest(slug: string, id: Id): Promise<Request>;
   inbox(slug: string): Promise<Request[]>;
   markRead(slug: string, id: Id): Promise<void>;
   // decisions
