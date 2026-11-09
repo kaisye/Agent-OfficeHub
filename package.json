@@ -11,17 +11,20 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
-    "dev": "pnpm -r --parallel dev",
-    "db:up": "docker compose up -d postgres",
+    "dev": "pnpm db:up && pnpm db:migrate && concurrently -k -n api,mcp,web -c blue,magenta,green \"pnpm dev:api\" \"pnpm dev:mcp\" \"pnpm dev:web:http\"",
+    "db:up": "docker compose up -d --wait postgres",
     "db:down": "docker compose down",
     "db:migrate": "pnpm --filter @officehub/db migrate",
     "db:seed": "pnpm --filter @officehub/db seed",
     "dev:api": "pnpm --filter @officehub/api dev",
     "dev:mcp": "pnpm --filter @officehub/mcp dev",
-    "dev:web": "pnpm --filter @officehub/web dev",
-    "e2e": "pnpm --filter @officehub/e2e e2e"
+    "e2e": "pnpm --filter @officehub/e2e e2e",
+    "dev:web:http": "NEXT_PUBLIC_API_MODE=http NEXT_PUBLIC_API_URL=http://localhost:8787 pnpm --filter @officehub/web dev",
+    "dev:ui": "pnpm --filter @officehub/web dev",
+    "dev:web": "pnpm --filter @officehub/web dev"
   },
   "devDependencies": {
+    "concurrently": "9.1.2",
     "typescript": "^5.6.3"
   }
 }

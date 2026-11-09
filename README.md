@@ -11,14 +11,12 @@ Requirements: Node ≥ 22, pnpm 10, Docker.
 ```bash
 pnpm install
 cp .env.example .env   # then set DEV_LOGIN_ENABLED=true for local dev login
-pnpm db:up            # Postgres 16 on localhost:5433
-pnpm db:migrate
-pnpm db:seed          # Tripflix demo: 7 members + 2 dev agent tokens (printed once)
+pnpm db:seed           # first time only: Tripflix demo data
 
-pnpm dev:api          # http://localhost:8787
-pnpm dev:mcp          # http://localhost:8788/mcp  (MCP, Streamable HTTP)
-NEXT_PUBLIC_API_MODE=http pnpm dev:web   # http://localhost:3000
+pnpm dev               # Postgres (docker) + migrate + API :8787 + MCP :8788 + web :3000, one terminal
 ```
+
+`Ctrl+C` stops everything except Postgres (`pnpm db:down` stops that). For the UI alone with mock data and no database: `pnpm dev:ui`.
 
 Open http://localhost:3000/login and pick a member (dev login). For a UI-only demo with no database, run `pnpm dev:web` (the default mock mode).
 
