@@ -24,12 +24,12 @@ apps/web/app/apple-icon.png        <- assets/apple-touch-icon.png
 ```
 hoặc đặt trong `public/` rồi khai báo `export const metadata = { icons: { icon: [{ url: "/icon.svg", type: "image/svg+xml" }, { url: "/favicon-32.png", sizes: "32x32", type: "image/png" }], apple: "/apple-touch-icon.png" } }`. `theme-color` nên là `#B93C0E` (sáng) / `#1C1814`-tông nền tối nếu cần. Sửa mark: sửa `iconSvg()` rồi chạy `build:icons`.
 
-**Gallery.** `pnpm --filter @officehub/brand gallery` đã tái tạo, có thêm mục icon.
+**Gallery.** Đã bỏ (hệ linh vật procedural được thay bằng Desk Buddies; xem MASCOT-SYSTEM.md).
 
 
 ## Đã có
 - `docs/design/BRAND-DNA.md`, `MASCOT-SYSTEM.md`, `COMPONENTS.md`.
-- `packages/brand` (`@officehub/brand`): `tokens.ts` (nguồn duy nhất), `tokens.css` + `tailwind-theme.css` (SINH TỪ tokens.ts bằng `pnpm --filter @officehub/brand build:css`; test báo lỗi nếu lệch), `mascot.ts` (`renderMascot`, `SPECIES`, `PALETTES`, `ACCESSORIES`, `MOODS`, `defaultMascotFor`, nhãn tiếng Việt), test tương phản AA, `preview/gallery.html` (mở trực tiếp bằng trình duyệt; tái tạo bằng `pnpm --filter @officehub/brand gallery`).
+- `packages/brand` (`@officehub/brand`): `tokens.ts` (nguồn duy nhất), `tokens.css` + `tailwind-theme.css` (SINH TỪ tokens.ts bằng `pnpm --filter @officehub/brand build:css`; test báo lỗi nếu lệch), `buddies.ts` (`BUDDIES`, `mascotSrc`, `MOODS`, nhãn tiếng Việt), `assets/mascots/*` (WebP 512/128 + PNG 256), test tương phản AA và test asset.
 - `packages/ui` (`@officehub/ui`): Mascot, PresencePill, MemberCard, TaskChip, EventRow, RequestCard (+ `availableActions`), DraftBlock, UntrustedQuote, ApprovalBar, DecisionCard, EmptyState, Button, Badge, Card, Dialog, Toast/ToastProvider/useToast, TokenRevealOnce, Icon, `relativeTimeVi`.
 
 ## Frontend nối token + Tailwind thế nào
@@ -47,7 +47,7 @@ Trong `apps/web/app/globals.css` (đường dẫn `@source` tính từ file CSS 
 - Ứng dụng cần `html { lang="vi" }`.
 
 ## Cách dùng nhanh
-`<Mascot mascot={member.mascot} presence={status.presence} size={48} />`; `<RequestCard request asker receiver viewerMemberId onAction={(a, r) => api.transition(r.id, a)} />`. Server gọi `renderMascot` trực tiếp cho ảnh bot/email nếu cần.
+`<Mascot mascot={member.mascot} presence={status.presence} size={48} />`; `<RequestCard request asker receiver viewerMemberId onAction={(a, r) => api.transition(r.id, a)} />`. 
 
 ## Còn thiếu / giới hạn
 - Chưa có Storybook/ảnh chụp; chỉ có gallery tĩnh cho linh vật (không gồm component React).

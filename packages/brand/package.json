@@ -15,8 +15,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "build:css": "tsx scripts/build-css.ts",
-    "gallery": "tsx preview/build-gallery.ts",
-    "build:icons": "tsx scripts/build-icons.ts"
+    "build:icons": "tsx scripts/build-icons.ts",
+    "build:mascots": "tsx scripts/build-mascots.ts"
   },
   "dependencies": {
     "@officehub/shared": "workspace:*"

@@ -1,2 +1,2 @@
 export * from "./tokens.js";
-export * from "./mascot.js";
+export * from "./buddies.js";

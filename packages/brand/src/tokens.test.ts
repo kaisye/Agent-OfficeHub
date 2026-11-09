@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { buildTailwindThemeCss, buildTokensCss, colorDark, colorLight, contrastRatio, type ColorTokens } from "./tokens.js";
+import { buildTailwindThemeCss, buildTokensCss, brandPalette, colorDark, colorLight, contrastRatio, type ColorTokens } from "./tokens.js";
 
 const css = (f: string) => readFileSync(new URL(f, import.meta.url), "utf8");
 
@@ -63,7 +63,7 @@ describe("app icon set", () => {
   });
   it("uses brand colors only", () => {
     const svg = readFileSync(asset("icon.svg"), "utf8");
-    expect(svg).toContain(colorLight.primary);
+    expect(svg).toContain(brandPalette.forest);
     expect(svg).toContain("<title>Office Hub</title>");
   });
 });
