@@ -1,16 +1,29 @@
 import { Fragment, type ReactNode } from "react";
+import { safeExternalHref } from "@officehub/ui";
 
-/** Inline: **bold**, _italic_, `code`. Everything else is plain text (React escapes it; no HTML is ever injected). */
+/** Inline: **bold**, _italic_, `code`, [text](url). Links render only for http(s) via safeExternalHref (SEC-09); otherwise just the text. Everything else is plain text (React escapes it; no HTML is ever injected). */
 function inline(text: string): ReactNode[] {
   const out: ReactNode[] = [];
-  const re = /(\*\*[^*]+\*\*|_[^_]+_|`[^`]+`)/g;
+  const re = /(\[[^\]]*\]\([^)\s]*\)|\*\*[^*]+\*\*|_[^_]+_|`[^`]+`)/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let i = 0;
   while ((m = re.exec(text))) {
     if (m.index > last) out.push(text.slice(last, m.index));
     const t = m[0];
-    if (t.startsWith("**")) out.push(<strong key={i++}>{t.slice(2, -2)}</strong>);
+    if (t.startsWith("[")) {
+      const lm = /^\[([^\]]*)\]\(([^)\s]*)\)$/.exec(t)!;
+      const href = safeExternalHref(lm[2]);
+      out.push(
+        href ? (
+          <a key={i++} href={href} target="_blank" rel="noreferrer noopener">
+            {lm[1]}
+          </a>
+        ) : (
+          lm[1]
+        ),
+      );
+    } else if (t.startsWith("**")) out.push(<strong key={i++}>{t.slice(2, -2)}</strong>);
     else if (t.startsWith("`")) out.push(<code key={i++}>{t.slice(1, -1)}</code>);
     else out.push(<em key={i++}>{t.slice(1, -1)}</em>);
     last = m.index + t.length;

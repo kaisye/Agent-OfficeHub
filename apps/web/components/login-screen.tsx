@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button, Icon, Mascot, useToast } from "@officehub/ui";
 import { useQuery } from "@tanstack/react-query";
-import { API_MODE, SEED_MEMBERS, SHOW_DEV_LOGIN, getApi } from "@/lib/api";
+import { API_MODE, LOGIN_WORKSPACE, SEED_MEMBERS, SHOW_DEV_LOGIN, getApi } from "@/lib/api";
+import { ApiClientError } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
 import { safeNext } from "@/lib/nav";
 
@@ -17,7 +18,9 @@ export function LoginScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const next = safeNext(params.get("next"), "/");
   // http: GET /auth/dev-members (only exists when DEV_LOGIN_ENABLED); mock: the seed members.
-  const devMembers = useQuery({ queryKey: ["devMembers"], queryFn: () => getApi().devMembers(), enabled: SHOW_DEV_LOGIN, retry: false });
+  const devMembers = useQuery({ queryKey: ["devMembers"], queryFn: () => getApi().devMembers(LOGIN_WORKSPACE), enabled: SHOW_DEV_LOGIN, retry: false });
+  // 404 = dev login disabled on the API: hide the picker, GitHub login only.
+  const devDisabled = devMembers.error instanceof ApiClientError && devMembers.error.status === 404;
   const list = devMembers.data ?? [];
   const HERO = list.find((m) => m.displayName === "Phong")?.mascot ?? list[0]?.mascot ?? SEED_HERO;
 
@@ -57,7 +60,7 @@ export function LoginScreen() {
         <p className="mt-2 text-oh-xs text-oh-ink-muted">Chỉ thành viên đã được quản trị viên thêm vào mới vào được.</p>
       </div>
 
-      {SHOW_DEV_LOGIN && (
+      {SHOW_DEV_LOGIN && !devDisabled && (
         <section aria-labelledby="dev-login" className="mt-10 rounded-oh-xl border border-dashed border-oh-border-strong bg-oh-surface p-5">
           <div className="flex items-center justify-between gap-2">
             <h2 id="dev-login" className="text-oh-lg font-semibold">

@@ -3,6 +3,7 @@ import type { EventType, HubEvent, Member, StatusCard, Task } from "@officehub/s
 type TaskState = Task["state"];
 import { Badge, Card, Icon, cn, type IconName } from "./primitives.js";
 import { Mascot, PRESENCE_LABEL_VI, PresencePill } from "./presence.js";
+import { safeExternalHref } from "./safe-url.js";
 
 /** "3 phút trước" style time. `now` is injectable for tests/SSR. */
 export function relativeTimeVi(iso: string, now: Date | number = Date.now()): string {
@@ -35,9 +36,10 @@ export function TaskChip({ task, className }: { task: Pick<Task, "source" | "ext
     </>
   );
   const cls = cn("inline-flex max-w-full items-center gap-1.5 rounded-oh-full border border-oh-border bg-oh-surface px-2.5 py-1 text-oh-ink", className);
-  return task.externalUrl ? (
+  const href = safeExternalHref(task.externalUrl);
+  return href ? (
     <a
-      href={task.externalUrl}
+      href={href}
       target="_blank"
       rel="noreferrer noopener"
       aria-label={`Mở việc ${[task.externalKey, task.title].filter(Boolean).join(" ")} ở nguồn gốc`}
