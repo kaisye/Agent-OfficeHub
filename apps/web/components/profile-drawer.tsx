@@ -8,6 +8,7 @@ import type { Board, Member } from "@officehub/shared";
 import { memberMap } from "@/lib/requests";
 import { NewRequestDialog } from "./new-request-dialog";
 import { StatusEditor } from "./status-editor";
+import { InviteLinkPanel } from "./invite-link";
 import { useWorkspace } from "./workspace";
 
 /** Profile drawer: status, open requests between you, "Tạo yêu cầu" (or your own status editor). */
@@ -114,6 +115,7 @@ export function ProfileDrawer({ member, board, onClose }: { member: Member | nul
                 </Button>
               </>
             )}
+            {me.role === "admin" && <InviteLinkPanel key={m.id} slug={slug} memberId={m.id} name={isMe ? "bạn" : m.displayName} />}
           </div>
         )}
       </Drawer>

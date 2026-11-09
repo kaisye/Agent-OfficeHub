@@ -661,6 +661,9 @@ function browserSession() {
   };
 }
 
+const mockCreds = new Map<string, { memberId: Id; password: string }>();
+const mockInvites = new Map<string, { memberId: Id; expires: number }>();
+
 export function createMockClient(opts: MockClientOptions = {}): ApiClient & { server: MockServer } {
   const server = opts.server ?? new MockServer(opts);
   const session = opts.session ?? browserSession();
@@ -687,6 +690,48 @@ export function createMockClient(opts: MockClientOptions = {}): ApiClient & { se
       }),
     githubLoginUrl: () => "/login?github=mock",
     logout: () => server.delay(() => session.set(null)),
+    // Mock credentials live in memory only (reset on reload), mirroring the server's rules.
+    passwordLogin: (email, password) =>
+      server.delay(() => {
+        const c = mockCreds.get(email.trim().toLowerCase());
+        if (!c || c.password !== password) throw err("unauthenticated", "Email hoặc mật khẩu không đúng", 401);
+        session.set(c.memberId);
+      }),
+    inviteInfo: (token) =>
+      server.delay(() => {
+        const i = mockInvites.get(token);
+        const m = i && i.expires > Date.now() ? server.members.find((x) => x.id === i.memberId) : undefined;
+        if (!m) throw err("not_found", "Link mời không hợp lệ hoặc đã hết hạn", 404);
+        return { displayName: m.displayName, workspaceName: server.workspace.name, mascot: m.mascot, email: null };
+      }),
+    acceptInvite: ({ token, email, password }) =>
+      server.delay(() => {
+        const i = mockInvites.get(token);
+        if (!i || i.expires < Date.now()) throw err("not_found", "Link mời không hợp lệ hoặc đã hết hạn", 404);
+        if (password.length < 10) throw err("validation_failed", "Mật khẩu cần ít nhất 10 ký tự", 400);
+        const key = email.trim().toLowerCase();
+        const taken = mockCreds.get(key);
+        if (taken && taken.memberId !== i.memberId) throw err("validation_failed", "Email này đã được một thành viên khác dùng", 400);
+        mockInvites.delete(token);
+        mockCreds.set(key, { memberId: i.memberId, password });
+        session.set(i.memberId);
+      }),
+    inviteMember: (slug, memberId) =>
+      run((v) => {
+        if (server.members.find((m) => m.id === v)?.role !== "admin") throw err("forbidden", "Chỉ admin mới tạo được link mời", 403);
+        for (const [t, i] of mockInvites) if (i.memberId === memberId) mockInvites.delete(t);
+        const token = `mock-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
+        const expires = Date.now() + 48 * 3600 * 1000;
+        mockInvites.set(token, { memberId, expires });
+        void slug;
+        return { url: `${typeof window === "undefined" ? "" : window.location.origin}/invite/${token}`, expiresAt: new Date(expires).toISOString() };
+      }),
+    changePassword: (_slug, { current, next }) =>
+      run((v) => {
+        const entry = [...mockCreds.entries()].find(([, c]) => c.memberId === v);
+        if (!entry || entry[1].password !== current) throw err("unauthenticated", "Mật khẩu hiện tại không đúng", 401);
+        mockCreds.set(entry[0], { memberId: v, password: next });
+      }),
     board: (slug) => run((v) => server.getBoard(slug, v)),
     updateMyStatus: (slug, input) => run((v) => server.updateMyStatus(slug, v, input)),
     updateMyMascot: (slug, input) => run((v) => server.updateMyMascot(slug, v, input)),

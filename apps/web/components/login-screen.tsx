@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button, Icon, Mascot, useToast } from "@officehub/ui";
 import { useQuery } from "@tanstack/react-query";
@@ -8,6 +8,10 @@ import { API_MODE, LOGIN_WORKSPACE, SEED_MEMBERS, SHOW_DEV_LOGIN, getApi } from 
 import { ApiClientError } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
 import { safeNext } from "@/lib/nav";
+import { Field, TextInput } from "./form";
+
+/** GitHub login is optional: shown only when the API has an OAuth app configured (NEXT_PUBLIC_GITHUB_LOGIN=1). */
+const GITHUB_ENABLED = process.env.NEXT_PUBLIC_GITHUB_LOGIN === "1";
 
 const SEED_HERO = SEED_MEMBERS.find((m) => m.displayName === "Phong")?.mascot ?? SEED_MEMBERS[0]!.mascot;
 
@@ -23,6 +27,22 @@ export function LoginScreen() {
   const devDisabled = devMembers.error instanceof ApiClientError && devMembers.error.status === 404;
   const list = devMembers.data ?? [];
   const HERO = list.find((m) => m.displayName === "Phong")?.mascot ?? list[0]?.mascot ?? SEED_HERO;
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
+  const passwordLogin = async (e: FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    setBusy("password");
+    try {
+      await getApi().passwordLogin(email, password);
+      router.replace(next);
+    } catch (err) {
+      setFormError(errorMessage(err));
+      setBusy(null);
+    }
+  };
 
   const github = () => {
     if (API_MODE === "mock") {
@@ -53,12 +73,30 @@ export function LoginScreen() {
         <p className="mt-2 max-w-md text-oh-base text-oh-ink-muted">
           Một văn phòng nhỏ ấm áp, nơi cả nhóm thấy nhau đang làm gì. Agent soạn nháp, còn bạn luôn là người bấm gửi.
         </p>
-        <Button variant="primary" size="lg" className="mt-6 w-full max-w-sm" onClick={github}>
-          <GithubMark />
-          Đăng nhập bằng GitHub
-        </Button>
-        <p className="mt-2 text-oh-xs text-oh-ink-muted">Chỉ thành viên đã được quản trị viên thêm vào mới vào được.</p>
       </div>
+
+      <form onSubmit={passwordLogin} className="mx-auto mt-6 w-full max-w-sm space-y-3 text-left" aria-label="Đăng nhập">
+        <Field label="Email">
+          {(id) => <TextInput id={id} type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />}
+        </Field>
+        <Field label="Mật khẩu" error={formError}>
+          {(id, d) => (
+            <TextInput id={id} type="password" autoComplete="current-password" required aria-describedby={d} value={password} onChange={(e) => setPassword(e.target.value)} />
+          )}
+        </Field>
+        <Button type="submit" variant="primary" size="lg" className="w-full" disabled={busy !== null}>
+          {busy === "password" ? "Đang đăng nhập…" : "Đăng nhập"}
+        </Button>
+        <p className="text-center text-oh-xs text-oh-ink-muted">
+          Chưa có tài khoản? Nhờ quản trị viên gửi cho bạn một link mời.
+        </p>
+        {GITHUB_ENABLED && (
+          <Button type="button" variant="secondary" className="w-full" onClick={github}>
+            <GithubMark />
+            Đăng nhập bằng GitHub
+          </Button>
+        )}
+      </form>
 
       {SHOW_DEV_LOGIN && !devDisabled && (
         <section aria-labelledby="dev-login" className="mt-10 rounded-oh-xl border border-dashed border-oh-border-strong bg-oh-surface p-5">

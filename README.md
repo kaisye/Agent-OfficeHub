@@ -22,6 +22,16 @@ Open http://localhost:3000/login and pick a member (dev login). For a UI-only de
 
 Connect Claude Code as an agent: create a token under **Agent của tôi**, then follow [docs/tech/agent-setup.md](docs/tech/agent-setup.md).
 
+## Sign-in
+
+Members sign in with **email + password**, so no GitHub account or email service is needed:
+
+1. An admin opens a member's profile on the office map and clicks **Tạo link mời**, which creates a one-time link valid for 48h.
+2. The admin sends the link privately (Zalo, Messenger). The member opens it and sets their email and password.
+3. After that, they log in at `/login`. A forgotten password is handled the same way: the admin creates a new link.
+
+For the very first admin, use dev login locally (`DEV_LOGIN_ENABLED=true`) to create your own link. GitHub login is optional: set `GITHUB_CLIENT_ID`/`SECRET` on the API and `NEXT_PUBLIC_GITHUB_LOGIN=1` on the web.
+
 ## What is where
 
 | Path | What | Team |

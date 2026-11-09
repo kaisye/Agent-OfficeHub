@@ -31,6 +31,10 @@ export interface ChangeEvent {
 }
 
 export type DevMember = z.infer<(typeof Routes)["devMembers"]["res"]>[number];
+export type InviteInfo = z.infer<(typeof Routes)["inviteInfo"]["res"]>;
+export type InviteLink = z.infer<(typeof Routes)["inviteMember"]["res"]>;
+export type AcceptInviteInput = Body<"acceptInvite">;
+export type ChangePasswordInput = Body<"changePassword">;
 
 /** One interface, two implementations (http | mock). All calls are scoped by workspace slug. */
 export interface ApiClient {
@@ -43,6 +47,13 @@ export interface ApiClient {
   /** Where the "Đăng nhập bằng GitHub" button sends the browser. */
   githubLoginUrl(): string;
   logout(): Promise<void>;
+  // password login via one-time invite links
+  passwordLogin(email: string, password: string): Promise<void>;
+  inviteInfo(token: string): Promise<InviteInfo>;
+  acceptInvite(input: AcceptInviteInput): Promise<void>;
+  /** Admin only. */
+  inviteMember(slug: string, memberId: Id): Promise<InviteLink>;
+  changePassword(slug: string, input: ChangePasswordInput): Promise<void>;
   // board
   board(slug: string): Promise<Board>;
   updateMyStatus(slug: string, input: UpdateStatusInput): Promise<void>;
