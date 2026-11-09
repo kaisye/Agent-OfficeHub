@@ -61,6 +61,13 @@ export async function closeAll(): Promise<void> {
   _admin = undefined;
 }
 
+/** Dedicated LISTEN connection (used by the API's SSE hub). Returns a close function. */
+export async function listenChannel(channel: string, onNotify: (payload: string) => void): Promise<() => Promise<void>> {
+  const conn = postgres(appUrl(), { max: 1, onnotice: () => {} });
+  await conn.listen(channel, onNotify);
+  return () => conn.end({ timeout: 1 });
+}
+
 /**
  * Run `fn` in a transaction where `app.workspace_id` is set for the transaction only
  * (set_config(..., is_local = true) == SET LOCAL, but parameterizable). RLS policies key on it.
