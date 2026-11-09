@@ -2,15 +2,19 @@
  * Procedural mascot renderer: pure function -> self-contained accessible SVG string.
  * No external assets, no ids, no scripts. Same input => same output.
  */
-import type { Mascot, MascotMood } from "@officehub/shared";
+import { MascotAccessory, MascotPalette as MascotPaletteEnum, MascotSpecies, type Mascot, type MascotMood } from "@officehub/shared";
 import { mascotPalettes, mascotShared, type MascotPalette } from "./tokens.js";
 
-export const SPECIES = ["blob", "cat", "owl", "bot", "fox", "bear"] as const;
+/** One source of truth: the zod enums in @officehub/shared. */
+export const SPECIES = MascotSpecies.options;
 export type Species = (typeof SPECIES)[number];
-export const PALETTES = Object.keys(mascotPalettes) as PaletteKey[];
-export type PaletteKey = keyof typeof mascotPalettes;
-export const ACCESSORIES = [null, "headphones", "glasses", "cap", "scarf", "plant"] as const;
+export const PALETTES = MascotPaletteEnum.options;
+export type PaletteKey = (typeof PALETTES)[number];
+export const ACCESSORIES = [null, ...MascotAccessory.options] as const;
 export type Accessory = (typeof ACCESSORIES)[number];
+// palettes in tokens must cover every key of the shared enum
+const _paletteCovered: Record<PaletteKey, unknown> = mascotPalettes;
+void _paletteCovered;
 export const MOODS = ["focused", "waiting", "worried", "curious", "relaxed", "sleeping"] as const;
 export type Mood = (typeof MOODS)[number];
 // compile-time guarantee that we cover every mood the shared contract can produce
@@ -21,12 +25,12 @@ export const SPECIES_LABEL_VI: Record<Species, string> = {
   blob: "Bé Blob", cat: "Mèo", owl: "Cú", bot: "Robot", fox: "Cáo", bear: "Gấu",
 };
 export const MOOD_LABEL_VI: Record<Mood, string> = {
-  focused: "đang tập trung",
+  focused: "đang làm",
   waiting: "đang chờ",
-  worried: "đang vướng",
-  curious: "đang xem xét",
-  relaxed: "thư thả",
-  sleeping: "đang ngủ",
+  worried: "bị kẹt",
+  curious: "đang xem",
+  relaxed: "rảnh",
+  sleeping: "ngoại tuyến",
 };
 
 export interface MascotTraits {
@@ -47,7 +51,7 @@ export interface RenderOptions {
 const n = (x: number) => String(Math.round(x * 10) / 10);
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
-const isIn = <T extends string>(list: readonly (T | null)[], v: unknown): v is T => list.includes(v as T);
+const isIn = <T extends string>(list: readonly T[], v: unknown): v is T => list.includes(v as T);
 
 /** FNV-1a 32-bit. */
 export function hash32(s: string): number {
@@ -354,7 +358,7 @@ function agentBadge(c: Ctx, size: number): string {
 
 export function renderMascot(traits: MascotTraits, opts: RenderOptions): string {
   const species: Species = isIn(SPECIES, traits.species) ? traits.species : "blob";
-  const paletteKey: PaletteKey = (PALETTES as string[]).includes(traits.palette) ? (traits.palette as PaletteKey) : "sunrise";
+  const paletteKey: PaletteKey = isIn(PALETTES, traits.palette) ? (traits.palette as PaletteKey) : "sunrise";
   const accessory: Accessory = (ACCESSORIES as readonly (string | null)[]).includes(traits.accessory)
     ? (traits.accessory as Accessory)
     : null;
@@ -386,7 +390,7 @@ export function renderMascot(traits: MascotTraits, opts: RenderOptions): string 
 
   const label = esc(
     opts.title?.trim() ||
-      `Linh vật ${SPECIES_LABEL_VI[species]} ${MOOD_LABEL_VI[mood]}${opts.agentBadge ? " (agent đã soạn)" : ""}`,
+      `Linh vật ${SPECIES_LABEL_VI[species]} ${MOOD_LABEL_VI[mood]}${opts.agentBadge ? " (agent soạn)" : ""}`,
   );
   const pose = POSE[mood];
   const sleepDim = mood === "sleeping" ? ` opacity=".88"` : "";

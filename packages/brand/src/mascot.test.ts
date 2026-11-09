@@ -82,7 +82,7 @@ describe("renderMascot", () => {
     expect(renderMascot(base, { mood: "focused" })).not.toContain("data-agent-badge");
     const withBadge = renderMascot(base, { mood: "focused", agentBadge: true });
     expect(withBadge).toContain("data-agent-badge");
-    expect(withBadge).toContain("agent đã soạn");
+    expect(withBadge).toContain("agent soạn");
   });
 
   it("keeps output small", () => {

@@ -1,5 +1,5 @@
 /** Writes packages/brand/preview/gallery.html — static, no server needed. */
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { PRESENCE_TO_MOOD } from "@officehub/shared";
 import {
@@ -34,7 +34,7 @@ const accessories = ACCESSORIES.map((a, i) =>
 ).join("");
 
 const badge = cell(renderMascot(base, { mood: "focused", size: 96 }), "người") +
-  cell(renderMascot(base, { mood: "focused", size: 96, agentBadge: true }), "agent đã soạn");
+  cell(renderMascot(base, { mood: "focused", size: 96, agentBadge: true }), "agent soạn");
 
 const sizes = [24, 32, 48, 96, 160]
   .map((px) => cell(renderMascot({ ...base, species: "fox", palette: "coral", accessory: "headphones", seed: 5 }, { mood: "curious", size: px, agentBadge: px >= 32 }), `${px}px`))
@@ -42,6 +42,18 @@ const sizes = [24, 32, 48, 96, 160]
 const smallMoods = SPECIES.map(
   (s) => `<div class="row">${MOODS.map((m) => renderMascot({ ...base, species: s, palette: "ocean" }, { mood: m, size: 32 })).join("")}</div>`,
 ).join("");
+
+const seed = JSON.parse(
+  readFileSync(fileURLToPath(new URL("../../../docs/business/seed-tripflix.json", import.meta.url)), "utf8"),
+) as { members: { displayName: string; mascot: { species: string; palette: string; accessory: string | null; seed: number } }[] };
+const tripflix = `<table class="grid"><thead><tr><th></th>${MOODS.map((m) => `<th>${m}<br><small>${MOOD_LABEL_VI[m]}</small></th>`).join("")}</tr></thead><tbody>${seed.members
+  .map(
+    (m) =>
+      `<tr><th>${m.displayName}</th>${MOODS.map(
+        (mood, i) => `<td>${renderMascot(m.mascot, { mood, size: 64, title: `${m.displayName}, ${MOOD_LABEL_VI[mood]}`, agentBadge: i % 2 === 1 })}</td>`,
+      ).join("")}</tr>`,
+  )
+  .join("")}</tbody></table><small>Cột chẵn có huy hiệu agent soạn để so sánh.</small>`;
 
 const section = (title: string, body: string) => `<section><h2>${title}</h2><div class="flex">${body}</div></section>`;
 
@@ -77,6 +89,7 @@ button:focus-visible{outline:3px solid var(--oh-focus);outline-offset:2px}
   <button onclick="delete document.documentElement.dataset.theme">Theo hệ thống</button>
 </div>
 <section><h2>6 loài × 6 tâm trạng (96px)</h2>${speciesMoodGrid}</section>
+<section><h2>7 thành viên Tripflix (seed) × 6 mood</h2>${tripflix}</section>
 ${section("PresenceState → mood (bản đồ từ @officehub/shared)", presenceMap)}
 ${section("7 bảng màu", palettes)}
 ${section("Phụ kiện (null, headphones, glasses, cap, scarf, plant)", accessories)}

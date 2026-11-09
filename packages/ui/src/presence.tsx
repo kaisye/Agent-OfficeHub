@@ -4,10 +4,10 @@ import { PRESENCE_TO_MOOD, type Mascot as MascotTraits, type MascotMood, type Pr
 import { cn } from "./primitives.js";
 
 export const PRESENCE_LABEL_VI: Record<PresenceState, string> = {
-  working: "Đang tập trung",
+  working: "Đang làm",
   waiting: "Đang chờ",
-  blocked: "Đang vướng",
-  reviewing: "Đang xem xét",
+  blocked: "Bị kẹt",
+  reviewing: "Đang xem",
   idle: "Rảnh",
   offline: "Ngoại tuyến",
 };

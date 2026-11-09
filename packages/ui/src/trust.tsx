@@ -30,11 +30,11 @@ export function DraftBlock({
     >
       <header className="mb-2 flex items-center gap-2 text-oh-xs font-medium text-oh-agent-soft-fg">
         {owner ? (
-          <Mascot mascot={owner.mascot} mood="focused" size={32} agentBadge title={`${owner.displayName} (agent đã soạn)`} />
+          <Mascot mascot={owner.mascot} mood="focused" size={32} agentBadge title={`${owner.displayName} (agent soạn)`} />
         ) : (
           <Icon name="bot" size={16} />
         )}
-        <span>Bản nháp do agent soạn · chưa gửi, cần bạn duyệt</span>
+        <span>Nháp từ agent · agent soạn giúp bạn, xem lại rồi bấm Gửi</span>
       </header>
       <div className="whitespace-pre-wrap text-oh-base text-oh-ink">{children}</div>
       {(onEdit || onSend) && (

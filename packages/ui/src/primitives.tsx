@@ -28,6 +28,7 @@ const PATHS = {
   info: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Zm0-10v5m0-9v.01",
   quote: "M4 6h7v7H6l-2 4V6Zm9 0h7v7h-5l-2 4V6Z",
   link: "M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1m2 6a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1",
+  bell: "M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9Zm-4.3 13a2 2 0 0 1-3.4 0",
   key: "M15 7a4 4 0 1 1-3.5 6L3 21v-3l2-1v-2l2-1 4.5-4.5A4 4 0 0 1 15 7Z",
 } as const;
 export type IconName = keyof typeof PATHS;

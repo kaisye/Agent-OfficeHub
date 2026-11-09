@@ -2,7 +2,7 @@ import type { EventType, HubEvent, Member, StatusCard, Task } from "@officehub/s
 
 type TaskState = Task["state"];
 import { Badge, Card, Icon, cn, type IconName } from "./primitives.js";
-import { Mascot, PresencePill } from "./presence.js";
+import { Mascot, PRESENCE_LABEL_VI, PresencePill } from "./presence.js";
 
 /** "3 phút trước" style time. `now` is injectable for tests/SSR. */
 export function relativeTimeVi(iso: string, now: Date | number = Date.now()): string {
@@ -68,14 +68,14 @@ export function MemberCard({
   return (
     <Card as="article" interactive aria-label={`${member.displayName}: ${presence}`} className={className}>
       <div className="flex items-start gap-3">
-        <Mascot mascot={member.mascot} presence={presence} size={48} agentBadge={byAgent} title={`${member.displayName}${byAgent ? " (agent cập nhật)" : ""}`} />
+        <Mascot mascot={member.mascot} presence={presence} size={48} agentBadge={byAgent} title={`${member.displayName}, ${PRESENCE_LABEL_VI[presence].toLowerCase()}${byAgent ? ", agent soạn" : ""}`} />
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-oh-base font-semibold">{member.displayName}</h3>
           <PresencePill presence={presence} />
         </div>
       </div>
       <p className="mt-3 text-oh-sm text-oh-ink">{status?.doing ?? <span className="text-oh-ink-muted">Chưa có cập nhật.</span>}</p>
-      {byAgent && <p className="mt-1 text-oh-xs text-oh-agent">Agent cập nhật hộ</p>}
+      {byAgent && <p className="mt-1 text-oh-xs text-oh-agent">Agent soạn · cập nhật hộ</p>}
       {status?.branch && (
         <p className="mt-2 font-mono text-oh-xs text-oh-ink-muted">
           <Icon name="pr" size={12} className="mr-1 inline" />
@@ -103,14 +103,14 @@ export const EVENT_ICON: Record<EventType, IconName> = {
   "ci.failed": "ciFail", "ci.passed": "ciPass", "deploy.succeeded": "deploy", "deploy.failed": "alert",
   "issue.opened": "issue", "issue.closed": "check", "request.created": "request", "request.sent": "send",
   "request.reply_drafted": "draft", "request.replied": "reply", "request.followed_up": "reply",
-  "request.closed": "check", "request.cancelled": "cancel", "decision.recorded": "decision", "status.updated": "status",
+  "request.closed": "check", "request.reminded": "bell", "request.cancelled": "cancel", "decision.recorded": "decision", "status.updated": "status",
 };
 export const EVENT_LABEL_VI: Record<EventType, string> = {
   "pr.opened": "Mở PR", "pr.merged": "Đã merge PR", "pr.closed": "Đóng PR", "pr.review_requested": "Cần review PR",
   "ci.failed": "CI lỗi", "ci.passed": "CI qua", "deploy.succeeded": "Deploy xong", "deploy.failed": "Deploy lỗi",
   "issue.opened": "Mở ticket", "issue.closed": "Đóng ticket", "request.created": "Tạo yêu cầu", "request.sent": "Đã gửi yêu cầu",
   "request.reply_drafted": "Có bản nháp trả lời", "request.replied": "Đã trả lời", "request.followed_up": "Hỏi lại",
-  "request.closed": "Đã chấp nhận, đóng yêu cầu", "request.cancelled": "Huỷ yêu cầu", "decision.recorded": "Ghi quyết định",
+  "request.closed": "Đã chấp nhận, đóng yêu cầu", "request.reminded": "Nhắc yêu cầu", "request.cancelled": "Huỷ yêu cầu", "decision.recorded": "Ghi quyết định",
   "status.updated": "Cập nhật trạng thái",
 };
 const EVENT_BAD = new Set<EventType>(["ci.failed", "deploy.failed"]);

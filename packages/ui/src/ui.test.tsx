@@ -41,16 +41,32 @@ describe("RequestCard", () => {
     const onAction = vi.fn();
     render(<RequestCard request={req("draft")} asker={asker} receiver={receiver} viewerMemberId={A} onAction={onAction} />);
     expect(screen.getByLabelText(/Bản nháp do agent soạn/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /Gửi yêu cầu/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Gửi$/ }));
     expect(onAction).toHaveBeenCalledWith("send", expect.anything());
-    expect(screen.getByRole("button", { name: /Huỷ yêu cầu/ })).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: /Gửi yêu cầu/ })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: /Hủy yêu cầu/ })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /^Gửi$/ })).toHaveLength(1);
   });
   it("receiver cannot see asker's buttons and sees the message as untrusted", () => {
     render(<RequestCard request={req("sent", { sentById: A, authoredBy: "human" })} asker={asker} receiver={receiver} viewerMemberId={B} />);
-    expect(screen.queryByRole("button", { name: /Huỷ yêu cầu/ })).toBeNull();
-    expect(screen.getByRole("button", { name: /Gửi trả lời/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Hủy yêu cầu/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /^Gửi trả lời$/ })).toBeTruthy();
     expect(screen.getByLabelText(/Nội dung từ Trang, chưa xác minh/)).toBeTruthy();
+  });
+  it("follow_up and send_reply-from-sent require a body; the draft stays hidden from the other side", () => {
+    const onAction = vi.fn();
+    const r = { ...req("replied", { sentById: B, kind: "reply", authoredBy: "human" }), unreadForViewer: true };
+    render(<RequestCard request={r} asker={asker} receiver={receiver} viewerMemberId={A} onAction={onAction} />);
+    expect(document.querySelector("[data-unread]")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Hỏi lại" }));
+    const send = screen.getByRole("button", { name: "Hỏi lại" }) as HTMLButtonElement;
+    expect(send.disabled).toBe(true);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Thêm tag nữa nhé" } });
+    fireEvent.click(send);
+    expect(onAction).toHaveBeenCalledWith("follow_up", expect.anything(), "Thêm tag nữa nhé");
+  });
+  it("hides the receiver's reply draft from the asker", () => {
+    render(<RequestCard request={req("reply_drafted", { kind: "reply", body: "BÍ MẬT nháp" })} asker={asker} receiver={receiver} viewerMemberId={A} />);
+    expect(screen.queryByText(/BÍ MẬT nháp/)).toBeNull();
   });
   it("closed request shows no actions", () => {
     render(<RequestCard request={req("closed", { sentById: A })} asker={asker} receiver={receiver} viewerMemberId={A} />);
@@ -68,7 +84,7 @@ describe("misc components", () => {
       status={{ memberId: A, presence: "waiting", doing: "Chờ tên biến", branch: "feat/x", waitingOn: [B], updatedAt: T, updatedBy: "agent" }} />);
     expect(screen.getByText("Đang chờ")).toBeTruthy();
     expect(screen.getByLabelText("Đang chờ").textContent).toContain("Phong");
-    expect(screen.getByText("Agent cập nhật hộ")).toBeTruthy();
+    expect(screen.getByText("Agent soạn · cập nhật hộ")).toBeTruthy();
   });
   it("UntrustedQuote renders text, never HTML", () => {
     const { container } = render(<UntrustedQuote authorName="Bảo">{"<img src=x onerror=alert(1)>"}</UntrustedQuote>);
