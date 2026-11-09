@@ -113,3 +113,26 @@ a { color: inherit; }
   :root:not([data-theme="light"]) { --oh-office-floor: #2B251E; --oh-office-floor-line: #352E25; --oh-office-wall: #3A3228; --oh-office-rug: #3A3326; }
 }
 :root[data-theme="dark"] { --oh-office-floor: #2B251E; --oh-office-floor-line: #352E25; --oh-office-wall: #3A3228; --oh-office-rug: #3A3326; }
+
+/* ---- Wider office + walking buddies ---- */
+.oh-office-layout { grid-template-columns: minmax(0, 1fr) 264px; gap: 18px; }
+.oh-floorplan { padding: 64px 34px 96px; min-height: 640px; }
+.oh-desks { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 52px 56px; }
+@media (max-width: 1200px) { .oh-office-layout { grid-template-columns: minmax(0, 1fr) 240px; } }
+@media (max-width: 760px) { .oh-floorplan { padding: 52px 12px 70px; min-height: 0; } .oh-desks { gap: 24px 10px; } }
+
+.oh-ws[data-away="true"] .oh-desk-mascot { opacity: .18; filter: grayscale(.6); transition: opacity .3s; }
+.oh-walkers { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+.oh-walker { position: absolute; left: 0; top: 0; width: 72px; height: 72px; will-change: transform; }
+.oh-walker img { width: 72px; height: 72px; object-fit: contain; filter: drop-shadow(0 6px 4px rgba(41, 44, 40, .18)); }
+.oh-walker[data-walking="true"] img { animation: oh-step .42s ease-in-out infinite; transform-origin: 50% 100%; }
+@keyframes oh-step { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-6px) rotate(3deg); } }
+.oh-speech { position: absolute; z-index: 6; transform: translate(-50%, -100%); max-width: 220px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px;
+  padding: 8px 11px; border-radius: 14px 14px 14px 4px; background: var(--oh-surface); border: 1px solid var(--oh-border); box-shadow: 0 8px 20px rgba(41, 44, 40, .14);
+  font-size: 12px; line-height: 1.35; color: var(--oh-ink); animation: oh-pop .22s ease-out; }
+.oh-speech b { font-weight: 600; color: var(--oh-primary); }
+.oh-speech[data-agent="true"] { border-style: dashed; border-color: var(--oh-agent, var(--oh-brand-cobalt)); }
+.oh-speech[data-agent="true"] b { color: var(--oh-agent, var(--oh-brand-cobalt)); }
+.oh-speech-bot { font-size: 11px; color: var(--oh-agent, var(--oh-brand-cobalt)); }
+@keyframes oh-pop { from { opacity: 0; transform: translate(-50%, -90%) scale(.92); } to { opacity: 1; transform: translate(-50%, -100%) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .oh-walker img, .oh-speech { animation: none !important; } }

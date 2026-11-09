@@ -1,11 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { BUDDIES } from "@officehub/brand";
 import { Icon, Mascot, StatusBadge, cn, relativeTimeVi } from "@officehub/ui";
 import type { Board, Member, PresenceState, StatusCard } from "@officehub/shared";
 import { memberMap } from "@/lib/requests";
 import { PulseOnChange } from "./pulse";
+import { WalkerLayer, useDemoTraffic, useRequestTraffic, useWalkQueue } from "./office-walkers";
+import { API_MODE, SHOW_DEV_LOGIN } from "@/lib/api";
+
+/** Visual-only demo traffic is offered in development builds and in mock mode, never in a production http build. */
+const DEMO_ALLOWED = API_MODE === "mock" || SHOW_DEV_LOGIN;
 
 type Room = "all" | "focus" | "wait" | "rest";
 const ROOMS: { id: Room; label: string; hint: string; match: (p: PresenceState) => boolean }[] = [
@@ -17,7 +22,7 @@ const ROOMS: { id: Room; label: string; hint: string; match: (p: PresenceState) 
 const ORDER: PresenceState[] = ["blocked", "waiting", "working", "reviewing", "idle", "offline"];
 const BOOK = ["var(--oh-brand-forest)", "var(--oh-brand-cobalt)", "#b87a50", "#94815f"];
 
-/** 2D office: CSS grid + furniture divs + one workstation button per member. No physics or free movement. */
+/** 2D office: CSS grid + furniture divs + one workstation button per member. Buddies walk between desks on exchanges. */
 export function OfficeMap({ board, meId, onOpen }: { board: Board; meId: string; onOpen: (m: Member) => void }) {
   const [room, setRoom] = useState<Room>("all");
   const map = memberMap(board.members);
@@ -29,6 +34,24 @@ export function OfficeMap({ board, meId, onOpen }: { board: Board; meId: string;
     .sort((a, b) => (a.id === meId ? -1 : b.id === meId ? 1 : ORDER.indexOf(presenceOf(a)) - ORDER.indexOf(presenceOf(b))));
   const online = board.cards.filter((c) => c.presence !== "offline").length;
 
+  const floorRef = useRef<HTMLDivElement>(null);
+  const desks = useRef(new Map<string, HTMLElement>());
+  const deskRef = useCallback((id: string) => desks.current.get(id), []);
+  const [away, setAway] = useState<Set<string>>(new Set());
+  const onAway = useCallback((id: string, isAway: boolean) => {
+    setAway((cur) => {
+      if (cur.has(id) === isAway) return cur;
+      const next = new Set(cur);
+      if (isAway) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+  const [demo, setDemo] = useState(false);
+  const { active, enqueue, done } = useWalkQueue();
+  useRequestTraffic(board, enqueue);
+  useDemoTraffic(demo, members, enqueue);
+
   return (
     <section aria-labelledby="office-h" className="overflow-hidden rounded-oh-lg border border-oh-border bg-oh-surface shadow-oh-md">
       <div className="flex items-start justify-between gap-2 px-5 pb-3 pt-5">
@@ -39,6 +62,21 @@ export function OfficeMap({ board, meId, onOpen }: { board: Board; meId: string;
             {online}/{board.members.length} người đang online · cập nhật trực tiếp
           </p>
         </div>
+        {DEMO_ALLOWED && (
+          <button
+            type="button"
+            aria-pressed={demo}
+            onClick={() => setDemo((d) => !d)}
+            className={cn(
+              "flex shrink-0 items-center gap-1.5 rounded-oh-md border px-3 py-1.5 text-oh-xs font-medium focus-visible:outline-3 focus-visible:outline-oh-focus",
+              demo ? "border-oh-primary bg-oh-primary-soft text-oh-primary-soft-fg" : "border-oh-border text-oh-ink-muted hover:bg-oh-surface-2",
+            )}
+            title="Chỉ hiệu ứng hình ảnh, không tạo dữ liệu"
+          >
+            <Icon name="office" size={13} />
+            {demo ? "Dừng mô phỏng" : "Mô phỏng trao đổi"}
+          </button>
+        )}
       </div>
       <div role="tablist" aria-label="Phòng" className="flex flex-wrap gap-1 px-5 pb-3.5">
         {ROOMS.map((r) => {
@@ -62,7 +100,7 @@ export function OfficeMap({ board, meId, onOpen }: { board: Board; meId: string;
         })}
       </div>
 
-      <div className="oh-floorplan" role="tabpanel">
+      <div className="oh-floorplan" role="tabpanel" ref={floorRef}>
         <span className="absolute left-5 top-3 z-[2] flex items-center gap-1.5 text-xs" style={{ color: "var(--oh-ink-muted)" }}>
           <span aria-hidden="true" className="size-1.5 rounded-oh-full bg-oh-success" />
           {def.label}
@@ -92,6 +130,11 @@ export function OfficeMap({ board, meId, onOpen }: { board: Board; meId: string;
                       className="oh-ws h-full w-full"
                       data-me={m.id === meId}
                       data-presence={presence}
+                      data-away={away.has(m.id)}
+                      ref={(el) => {
+                        if (el) desks.current.set(m.id, el);
+                        else desks.current.delete(m.id);
+                      }}
                       onClick={() => onOpen(m)}
                       aria-label={`${m.displayName}${m.id === meId ? " (bạn)" : ""}, ${buddy?.name ?? ""}. Mở hồ sơ`}
                     >
@@ -124,6 +167,8 @@ export function OfficeMap({ board, meId, onOpen }: { board: Board; meId: string;
             })}
           </ul>
         )}
+
+        <WalkerLayer walks={active} members={board.members} floorRef={floorRef} deskRef={deskRef} onAway={onAway} onDone={done} />
 
         <div aria-hidden="true" className="oh-lounge">
           <div className="oh-sofa"><span /><span /><span /></div>
