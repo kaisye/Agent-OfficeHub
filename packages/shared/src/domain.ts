@@ -69,6 +69,8 @@ export const StatusCard = z.object({
   waitingOn: z.array(Id), // member ids
   updatedAt: IsoDate,
   updatedBy: z.enum(["human", "agent"]),
+  /** Set when updatedBy === "agent" (which of the member's agents posted it). */
+  updatedByAgentId: Id.nullable().optional(),
 });
 export type StatusCard = z.infer<typeof StatusCard>;
 
@@ -97,7 +99,9 @@ export type Agent = z.infer<typeof Agent>;
 
 /* ---------- Task (Việc) — a pointer to the source tool ---------- */
 export const TaskSource = z.enum(["github_pr", "github_issue", "jira", "manual"]);
+export type TaskSource = z.infer<typeof TaskSource>;
 export const TaskState = z.enum(["open", "in_progress", "in_review", "blocked", "done", "closed"]);
+export type TaskState = z.infer<typeof TaskState>;
 export const Task = z.object({
   id: Id,
   workspaceId: Id,
