@@ -37,8 +37,8 @@ export interface ApiClient {
   readonly mode: "http" | "mock";
   // session
   me(): Promise<Me>;
-  /** Dev login picker (http: GET /auth/dev-members; mock: the seed members). */
-  devMembers(): Promise<DevMember[]>;
+  /** Dev login picker (http: GET /auth/dev-members?workspace=<slug>, 404 when dev login is disabled; mock: the seed members). */
+  devMembers(workspace: string): Promise<DevMember[]>;
   devLogin(memberId: Id): Promise<void>;
   /** Where the "Đăng nhập bằng GitHub" button sends the browser. */
   githubLoginUrl(): string;

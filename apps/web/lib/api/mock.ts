@@ -675,7 +675,7 @@ export function createMockClient(opts: MockClientOptions = {}): ApiClient & { se
     server,
     mode: "mock",
     me: () => run((v) => server.getMe(v)),
-    devMembers: () =>
+    devMembers: (_workspace) =>
       server.delay(() =>
         server.members.map((m) => ({ id: m.id, displayName: m.displayName, workspaceSlug: server.workspace.slug, mascot: m.mascot })),
       ),

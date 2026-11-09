@@ -56,7 +56,7 @@ export function createHttpClient(opts: HttpClientOptions): ApiClient {
   return {
     mode: "http",
     me: () => call(Routes.me),
-    devMembers: () => call(Routes.devMembers),
+    devMembers: (workspace) => call({ ...Routes.devMembers, path: `${Routes.devMembers.path}?workspace=${encodeURIComponent(workspace)}` }),
     devLogin: async (memberId) => void (await call(Routes.devLogin, {}, { memberId })),
     githubLoginUrl: () => base + Routes.githubLogin.path,
     logout: async () => void (await call(Routes.logout)),

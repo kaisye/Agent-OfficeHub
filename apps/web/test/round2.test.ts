@@ -22,7 +22,7 @@ describe("contract v0.3 in the mock", () => {
 
   it("devMembers lists members with their workspace slug", async () => {
     const api = setup();
-    const list = await api.devMembers();
+    const list = await api.devMembers("tripflix");
     expect(list.length).toBeGreaterThan(3);
     expect(list.every((m) => m.workspaceSlug === S)).toBe(true);
     expect(() => Routes.devMembers.res.parse(list)).not.toThrow();
