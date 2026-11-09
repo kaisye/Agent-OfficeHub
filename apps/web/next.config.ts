@@ -49,6 +49,8 @@ const config: NextConfig = {
   },
   reactStrictMode: true,
   outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
+  // A second server (e.g. QA screenshots on another port) must use its own build dir, or the two corrupt each other.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   transpilePackages: ["@officehub/shared", "@officehub/brand", "@officehub/ui"],
   // The mock client seeds itself from docs/business/seed-tripflix.json (outside this app).
   experimental: { externalDir: true },
