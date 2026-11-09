@@ -29,24 +29,25 @@ export function TaskChip({ task, className }: { task: Pick<Task, "source" | "ext
   const body = (
     <>
       <Icon name={TASK_ICON[task.source]} size={14} />
-      {task.externalKey && <span className="font-mono text-oh-xs">{task.externalKey}</span>}
-      <span className="max-w-48 truncate text-oh-sm">{task.title}</span>
-      <Badge tone={task.state === "blocked" ? "danger" : task.state === "done" ? "success" : "neutral"}>{TASK_STATE_LABEL_VI[task.state]}</Badge>
+      {task.externalKey && <span className="shrink-0 whitespace-nowrap font-mono text-oh-xs">{task.externalKey}</span>}
+      <span className="min-w-0 max-w-48 truncate text-oh-sm" title={task.title}>{task.title}</span>
+      <Badge className="shrink-0 whitespace-nowrap" tone={task.state === "blocked" ? "danger" : task.state === "done" ? "success" : "neutral"}>{TASK_STATE_LABEL_VI[task.state]}</Badge>
     </>
   );
-  const cls = cn("inline-flex items-center gap-1.5 rounded-oh-full border border-oh-border bg-oh-surface px-2.5 py-1 text-oh-ink", className);
+  const cls = cn("inline-flex max-w-full items-center gap-1.5 rounded-oh-full border border-oh-border bg-oh-surface px-2.5 py-1 text-oh-ink", className);
   return task.externalUrl ? (
     <a
       href={task.externalUrl}
       target="_blank"
       rel="noreferrer noopener"
-      aria-label={`Mở việc ${task.externalKey ?? task.title} ở nguồn gốc`}
+      aria-label={`Mở việc ${[task.externalKey, task.title].filter(Boolean).join(" ")} ở nguồn gốc`}
+      title={task.title}
       className={cn(cls, "hover:bg-oh-surface-2 focus-visible:outline-3 focus-visible:outline-oh-focus")}
     >
       {body}
     </a>
   ) : (
-    <span className={cls}>{body}</span>
+    <span className={cls} title={task.title}>{body}</span>
   );
 }
 
@@ -66,9 +67,9 @@ export function MemberCard({
   const presence = status?.presence ?? "offline";
   const byAgent = status?.updatedBy === "agent";
   return (
-    <Card as="article" interactive aria-label={`${member.displayName}: ${presence}`} className={className}>
+    <Card as="article" interactive aria-label={`${member.displayName} — ${PRESENCE_LABEL_VI[presence].toLowerCase()}`} className={className}>
       <div className="flex items-start gap-3">
-        <Mascot mascot={member.mascot} presence={presence} size={48} agentBadge={byAgent} title={`${member.displayName}, ${PRESENCE_LABEL_VI[presence].toLowerCase()}${byAgent ? ", agent soạn" : ""}`} />
+        <Mascot mascot={member.mascot} presence={presence} size={48} agentBadge={byAgent} title={`${member.displayName} — ${PRESENCE_LABEL_VI[presence].toLowerCase()}${byAgent ? " — agent soạn" : ""}`} />
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-oh-base font-semibold">{member.displayName}</h3>
           <PresencePill presence={presence} />
@@ -87,7 +88,7 @@ export function MemberCard({
           <li className="text-oh-xs text-oh-ink-muted">Chờ:</li>
           {waitingOnMembers.map((m) => (
             <li key={m.id} className="inline-flex items-center gap-1 rounded-oh-full bg-oh-warning-soft py-0.5 pl-0.5 pr-2 text-oh-xs text-oh-warning-soft-fg">
-              <Mascot mascot={m.mascot} mood="relaxed" size={24} title={m.displayName} />
+              <Mascot mascot={m.mascot} mood="relaxed" size={24} decorative />
               {m.displayName}
             </li>
           ))}

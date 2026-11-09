@@ -44,6 +44,8 @@ export interface RenderOptions {
   size?: number;
   agentBadge?: boolean;
   title?: string;
+  /** Purely decorative (a visible name sits next to it): aria-hidden, no <title>. */
+  decorative?: boolean;
 }
 
 /* ---------- helpers ---------- */
@@ -390,7 +392,7 @@ export function renderMascot(traits: MascotTraits, opts: RenderOptions): string 
 
   const label = esc(
     opts.title?.trim() ||
-      `Linh vật ${SPECIES_LABEL_VI[species]} ${MOOD_LABEL_VI[mood]}${opts.agentBadge ? " (agent soạn)" : ""}`,
+      `Linh vật ${SPECIES_LABEL_VI[species].toLowerCase()}, ${MOOD_LABEL_VI[mood]}${opts.agentBadge ? ", agent soạn" : ""}`,
   );
   const pose = POSE[mood];
   const sleepDim = mood === "sleeping" ? ` opacity=".88"` : "";
@@ -399,8 +401,8 @@ export function renderMascot(traits: MascotTraits, opts: RenderOptions): string 
     g.back(c) + g.body(c) + g.deco(c) + shine + mark + face(mood, g, c) + g.front(c) + acc.under + acc.over;
 
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" role="img" width="${size}" height="${size}" viewBox="0 0 100 100" data-species="${species}" data-mood="${mood}">` +
-    `<title>${label}</title>` +
+    `<svg xmlns="http://www.w3.org/2000/svg" ${opts.decorative ? 'aria-hidden="true" focusable="false"' : 'role="img"'} width="${size}" height="${size}" viewBox="0 0 100 100" data-species="${species}" data-mood="${mood}">` +
+    (opts.decorative ? "" : `<title>${label}</title>`) +
     `<g fill="none" stroke="${c.p.dark}" stroke-width="${n(c.sw)}" stroke-linecap="round" stroke-linejoin="round">` +
     `<g${pose ? ` transform="${pose}"` : ""}${sleepDim}>${inner}</g>` +
     symbol(mood, c) +

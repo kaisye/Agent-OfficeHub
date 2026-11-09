@@ -195,7 +195,8 @@ export const motion = {
 
 /* ---------- helpers ---------- */
 
-export const kebab = (s: string) => s.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase());
+/** camelCase -> kebab-case; digits start a new segment (surface2 -> surface-2). */
+export const kebab = (s: string) => s.replace(/[A-Z]|\d+/g, (m) => "-" + m.toLowerCase());
 
 /** WCAG relative luminance contrast ratio of two #RRGGBB colors. */
 export function contrastRatio(a: string, b: string): number {
@@ -233,6 +234,8 @@ export function buildTokensCss(): string {
     ...Object.entries(spacing).map(([k, v]) => `  --oh-space-${k}: ${v / 16}rem;`),
     ...Object.entries(radius).map(([k, v]) => `  --oh-radius-${k}: ${v === 9999 ? "9999px" : v / 16 + "rem"};`),
     ...Object.entries(motion.duration).map(([k, v]) => `  --oh-duration-${k}: ${v}ms;`),
+    // Deprecated alias (pre-0.3 name). Canonical: --oh-surface-2 / bg-oh-surface-2.
+    `  --oh-surface2: var(--oh-surface-2);`,
     `  --oh-ease-standard: ${motion.easing.standard};`,
     `  --oh-ease-out: ${motion.easing.out};`,
     ...Object.entries(mascotPalettes).flatMap(([name, p]) => [

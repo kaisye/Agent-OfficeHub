@@ -1,51 +1,13 @@
-import { useState } from "react";
+"use client";
+
+import { useState, type ElementType } from "react";
 import type { Actor, Member, Request, RequestAction, RequestMessage, RequestStatus } from "@officehub/shared";
-import { bodyRequirement, canSeeMessage, canTransition } from "@officehub/shared";
+import { bodyRequirement, canSeeMessage } from "@officehub/shared";
 import { Badge, Button, Card, Icon, cn, type BadgeTone, type ButtonVariant, type IconName } from "./primitives.js";
 import { Mascot } from "./presence.js";
 import { DraftBlock, UntrustedQuote } from "./trust.js";
 import { relativeTimeVi } from "./board.js";
-
-/** Neutral labels (no viewer context). See docs/business/request-flow.md §6 for per-viewer labels. */
-export const REQUEST_STATUS_LABEL_VI: Record<RequestStatus, string> = {
-  draft: "Bản nháp",
-  sent: "Đã gửi",
-  reply_drafted: "Nháp trả lời",
-  replied: "Đã có trả lời",
-  closed: "Đã xong",
-  cancelled: "Đã hủy",
-};
-
-/** Label + one-line helper, per viewer side (request-flow.md §6). */
-export function requestStatusText(
-  request: Pick<Request, "status" | "messages">,
-  side: "asker" | "receiver" | "observer",
-  otherName: string,
-): { label: string; help: string } {
-  const lastDraftByAgent = [...request.messages].reverse().find((m) => m.sentById === null)?.authoredBy === "agent";
-  switch (request.status) {
-    case "draft":
-      return lastDraftByAgent
-        ? { label: "Nháp từ agent", help: "Agent đã soạn giúp bạn; xem lại rồi bấm Gửi." }
-        : { label: "Bản nháp", help: "Chưa gửi, chỉ mình bạn thấy." };
-    case "sent":
-      return side === "receiver"
-        ? { label: "Chờ bạn trả lời", help: `${otherName} đang chờ bạn; soạn hoặc nhờ agent soạn nháp.` }
-        : { label: "Đã gửi", help: `Đang chờ ${otherName} trả lời.` };
-    case "reply_drafted":
-      return side === "receiver"
-        ? { label: "Nháp trả lời", help: "Đã có nháp, xem lại rồi bấm Gửi trả lời." }
-        : { label: "Đã gửi", help: `Đang chờ ${otherName} trả lời.` };
-    case "replied":
-      return side === "asker"
-        ? { label: "Đã có trả lời", help: "Chấp nhận để đóng, hoặc hỏi lại nếu chưa đủ." }
-        : { label: "Đã trả lời", help: `Đang chờ ${otherName} chấp nhận.` };
-    case "closed":
-      return { label: "Đã xong", help: "Yêu cầu đã được chấp nhận." };
-    case "cancelled":
-      return { label: "Đã hủy", help: "Người hỏi đã hủy; không cần trả lời nữa." };
-  }
-}
+import { ACTION_LABEL_VI, availableActions, requestStatusText } from "./request-logic.js";
 
 const STATUS_TONE: Record<RequestStatus, BadgeTone> = {
   draft: "agent", sent: "warning", reply_drafted: "agent", replied: "human", closed: "success", cancelled: "neutral",
@@ -54,14 +16,6 @@ const STATUS_ICON: Record<RequestStatus, IconName> = {
   draft: "draft", sent: "send", reply_drafted: "draft", replied: "reply", closed: "check", cancelled: "cancel",
 };
 
-export const ACTION_LABEL_VI: Record<RequestAction, string> = {
-  send: "Gửi",
-  draft_reply: "Soạn trả lời",
-  send_reply: "Gửi trả lời",
-  accept: "Chấp nhận",
-  follow_up: "Hỏi lại",
-  cancel: "Hủy yêu cầu",
-};
 /** Optional caption under the button group. */
 const ACTION_HINT_VI: Partial<Record<RequestAction, (name: string) => string>> = {
   send: (n) => `Chỉ khi bạn bấm, yêu cầu mới tới ${n}.`,
@@ -74,13 +28,6 @@ const ACTION_VARIANT: Record<RequestAction, ButtonVariant> = {
 const ACTION_ICON: Partial<Record<RequestAction, IconName>> = {
   send: "send", send_reply: "send", accept: "check", follow_up: "reply", draft_reply: "draft", cancel: "cancel",
 };
-const ACTION_ORDER: RequestAction[] = ["send", "send_reply", "accept", "follow_up", "draft_reply", "cancel"];
-
-/** Which actions this actor may take now. Delegates entirely to the shared state machine. */
-export function availableActions(request: Pick<Request, "status" | "askerId" | "receiverId">, actor: Actor): RequestAction[] {
-  return ACTION_ORDER.filter((a) => canTransition(request, a, actor).ok);
-}
-
 export type RequestActionHandler = (action: RequestAction, request: Request, body?: string) => void;
 
 export interface RequestCardProps {
@@ -93,11 +40,17 @@ export interface RequestCardProps {
   onAction?: RequestActionHandler;
   /** Open the edit box for an agent draft. */
   onEditDraft?: (message: RequestMessage) => void;
+  /** When set, the card footer shows a quiet "open details" link to this URL. */
+  detailHref?: string;
+  /** Link label; default "Mở chi tiết và chuỗi trao đổi". */
+  detailLabel?: string;
+  /** Link component, e.g. next/link, so navigation stays client-side. Default: "a". */
+  linkAs?: ElementType;
   now?: Date | number;
   className?: string;
 }
 
-export function RequestCard({ request, asker, receiver, viewerMemberId, onAction, onEditDraft, now, className }: RequestCardProps) {
+export function RequestCard({ request, asker, receiver, viewerMemberId, onAction, onEditDraft, detailHref, detailLabel = "Mở chi tiết và chuỗi trao đổi", linkAs: LinkTag = "a", now, className }: RequestCardProps) {
   const [composing, setComposing] = useState<RequestAction | null>(null);
   const [text, setText] = useState("");
   const actor: Actor = { kind: "human", memberId: viewerMemberId };
@@ -158,10 +111,11 @@ export function RequestCard({ request, asker, receiver, viewerMemberId, onAction
       <p className="text-oh-xs text-oh-ink-muted">{help}</p>
 
       <div className="flex items-center gap-2 text-oh-sm" aria-label={`${asker.displayName} hỏi ${receiver.displayName}`}>
-        <Mascot mascot={asker.mascot} mood="relaxed" size={32} title={asker.displayName} />
+        <Mascot mascot={asker.mascot} mood="relaxed" size={32} decorative />
         <span className="font-medium">{asker.displayName}</span>
         <Icon name="reply" size={14} className="rotate-180 text-oh-ink-muted" />
-        <Mascot mascot={receiver.mascot} mood="relaxed" size={32} title={receiver.displayName} />
+        <span className="sr-only">hỏi</span>
+        <Mascot mascot={receiver.mascot} mood="relaxed" size={32} decorative />
         <span className="font-medium">{receiver.displayName}</span>
         {request.dueAt && <span className="ml-auto text-oh-xs text-oh-ink-muted">Hạn {new Date(request.dueAt).toLocaleDateString("vi-VN")}</span>}
       </div>
@@ -220,7 +174,7 @@ export function RequestCard({ request, asker, receiver, viewerMemberId, onAction
       )}
 
       {!composing && footerActions.length > 0 && (
-        <footer className="space-y-1">
+        <div className="space-y-1">
           <div className="flex flex-wrap gap-2">
             {footerActions.map((a) => (
               <Button key={a} variant={ACTION_VARIANT[a]} icon={ACTION_ICON[a]} onClick={() => click(a)}>
@@ -229,9 +183,20 @@ export function RequestCard({ request, asker, receiver, viewerMemberId, onAction
             ))}
           </div>
           {hint && <p className="text-oh-xs text-oh-ink-muted">{hint}</p>}
-        </footer>
+        </div>
       )}
-      <p className="text-oh-xs text-oh-ink-muted">Cập nhật {relativeTimeVi(request.updatedAt, now)}</p>
+      <footer className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-oh-border pt-3 text-oh-xs text-oh-ink-muted">
+        <span>Cập nhật {relativeTimeVi(request.updatedAt, now)}</span>
+        {detailHref && (
+          <LinkTag
+            href={detailHref}
+            className="group inline-flex items-center gap-1 rounded-oh-sm text-oh-sm font-medium text-oh-ink-muted underline-offset-2 hover:text-oh-ink hover:underline focus-visible:outline-3 focus-visible:outline-oh-focus"
+          >
+            {detailLabel}
+            <Icon name="arrowRight" size={14} className="transition-transform group-hover:translate-x-0.5" />
+          </LinkTag>
+        )}
+      </footer>
     </Card>
   );
 }
