@@ -168,10 +168,10 @@ function Thread({
         <p className="text-oh-sm text-oh-ink-muted">{help}</p>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-oh-sm">
           <span className="inline-flex items-center gap-2">
-            <Mascot mascot={asker.mascot} mood="relaxed" size={32} title={asker.displayName} />
+            <Mascot mascot={asker.mascot} mood="relaxed" size={32} decorative />
             <b>{asker.displayName}</b>
             <Icon name="reply" size={14} className="rotate-180 text-oh-ink-muted" />
-            <Mascot mascot={receiver.mascot} mood="relaxed" size={32} title={receiver.displayName} />
+            <Mascot mascot={receiver.mascot} mood="relaxed" size={32} decorative />
             <b>{receiver.displayName}</b>
           </span>
           {request.dueAt && <span className="text-oh-ink-muted">Hạn {new Date(request.dueAt).toLocaleDateString("vi-VN")}</span>}

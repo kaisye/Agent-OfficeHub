@@ -116,6 +116,8 @@ export function RequestsScreen() {
                     asker={asker}
                     receiver={receiver}
                     viewerMemberId={me.id}
+                    detailHref={`/w/${slug}/requests/${r.id}`}
+                    linkAs={Link}
                     onAction={runner.handle}
                     onEditDraft={() => router.push(`/w/${slug}/requests/${r.id}?edit=1`)}
                   />
@@ -127,14 +129,6 @@ export function RequestsScreen() {
                       onDismiss={() => setFailed(({ [r.id]: _gone, ...rest }) => rest)}
                     />
                   )}
-                  <div className="px-1">
-                    <Link
-                      href={`/w/${slug}/requests/${r.id}`}
-                      className="text-oh-sm font-medium underline-offset-2 hover:underline focus-visible:outline-3 focus-visible:outline-oh-focus"
-                    >
-                      Mở chi tiết và chuỗi trao đổi
-                    </Link>
-                  </div>
                 </li>
               );
             })}

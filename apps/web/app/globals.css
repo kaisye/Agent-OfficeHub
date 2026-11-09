@@ -19,13 +19,13 @@ a { color: inherit; }
 
 /* The "office floor": a soft dotted carpet the member cards stand on. */
 .oh-floor {
-  background-color: var(--oh-surface2);
+  background-color: var(--oh-surface-2);
   background-image: radial-gradient(color-mix(in srgb, var(--oh-ink-muted) 18%, transparent) 1.2px, transparent 1.2px);
   background-size: 22px 22px;
 }
 
 .oh-skeleton {
-  background: linear-gradient(90deg, var(--oh-surface2) 0%, var(--oh-border) 50%, var(--oh-surface2) 100%);
+  background: linear-gradient(90deg, var(--oh-surface-2) 0%, var(--oh-border) 50%, var(--oh-surface-2) 100%);
   background-size: 200% 100%;
   animation: oh-shimmer 1.6s ease-in-out infinite;
 }
@@ -52,8 +52,3 @@ a { color: inherit; }
 .oh-prose blockquote { border-left: 4px solid var(--oh-untrusted); background: var(--oh-untrusted-soft); padding: .35rem .75rem; margin: .25rem 0; border-radius: 6px; font-size: .875rem; }
 .oh-prose em { color: var(--oh-ink-muted); }
 .oh-prose code { font-family: var(--oh-font-mono, monospace); font-size: .85em; }
-
-/* Workaround: @officehub/ui uses `oh-surface-2` but the brand theme names it `oh-surface2` (reported to Design). */
-@theme inline {
-  --color-oh-surface-2: var(--oh-surface2);
-}

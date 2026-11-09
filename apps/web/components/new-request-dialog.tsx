@@ -190,7 +190,7 @@ export function NewRequestDialog({
                       on ? "border-oh-primary bg-oh-primary-soft" : "border-oh-border bg-oh-surface hover:bg-oh-surface-2",
                     )}
                   >
-                    <Mascot mascot={m.mascot} mood="relaxed" size={32} title={m.displayName} />
+                    <Mascot mascot={m.mascot} mood="relaxed" size={32} decorative />
                     <span className="truncate font-medium">{m.displayName}</span>
                   </button>
                 );

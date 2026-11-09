@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Office Hub">
+<title>Office Hub</title>
+<rect width="64" height="64" rx="14" fill="#B93C0E"/>
+<path d="M32 12c11 0 19 8 19 19 0 11-8 20-19 20S13 42 13 31c0-11 8-19 19-19Z" fill="#FFB84D" stroke="#7A3E0B" stroke-width="3" stroke-linejoin="round"/>
+<path d="M21 22c3-5 9-7 15-6" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="3" stroke-linecap="round"/>
+<circle cx="25" cy="31" r="3.2" fill="#7A3E0B"/>
+<circle cx="39" cy="31" r="3.2" fill="#7A3E0B"/>
+<path d="M26 40c3 3.2 9 3.2 12 0" fill="none" stroke="#7A3E0B" stroke-width="3" stroke-linecap="round"/>
+</svg>

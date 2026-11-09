@@ -133,7 +133,7 @@ function NeedsList({ items, map, slug, meId, labelledBy }: { items: Request[]; m
               href={`/w/${slug}/requests/${r.id}`}
               className="flex min-w-0 items-center gap-3 rounded-oh-lg border border-oh-border bg-oh-surface p-3 hover:shadow-oh-md focus-visible:outline-3 focus-visible:outline-oh-focus"
             >
-              {other && <Mascot mascot={other.mascot} mood="relaxed" size={32} title={other.displayName} />}
+              {other && <Mascot mascot={other.mascot} mood="relaxed" size={32} decorative />}
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
                   {r.unreadForViewer && <span role="img" aria-label="Chưa đọc" className="size-2.5 shrink-0 rounded-oh-full bg-oh-primary" />}
@@ -168,11 +168,11 @@ function WaitingStrip({ board }: { board: Board }) {
             aria-label={`${p.from!.displayName} đang chờ ${p.to!.displayName}`}
           >
             <PulseOnChange value={p.presence} className="rounded-oh-full">
-              <Mascot mascot={p.from!.mascot} presence={p.presence} size={24} title={p.from!.displayName} />
+              <Mascot mascot={p.from!.mascot} presence={p.presence} size={24} decorative />
             </PulseOnChange>
             <span className="font-medium">{p.from!.displayName}</span>
             <Icon name="reply" size={14} className="rotate-180" />
-            <Mascot mascot={p.to!.mascot} mood="relaxed" size={24} title={p.to!.displayName} />
+            <Mascot mascot={p.to!.mascot} mood="relaxed" size={24} decorative />
             <span className="font-medium">{p.to!.displayName}</span>
           </li>
         ))}
@@ -262,7 +262,7 @@ function OpenTasks({ board, slug }: { board: Board; slug: string }) {
                 <TaskChip task={t} className="max-w-full [&_.font-mono]:whitespace-nowrap" />
                 <div className="mt-1.5 flex items-center justify-between gap-2 text-oh-xs text-oh-ink-muted">
                   <span className="inline-flex items-center gap-1">
-                    {owner && <Mascot mascot={owner.mascot} mood="relaxed" size={24} title={owner.displayName} />}
+                    {owner && <Mascot mascot={owner.mascot} mood="relaxed" size={24} decorative />}
                     {owner?.displayName ?? "Chưa giao"}
                   </span>
                   <Link href={`/w/${slug}/tasks/${t.id}`} className="font-medium underline-offset-2 hover:underline focus-visible:outline-3 focus-visible:outline-oh-focus">
