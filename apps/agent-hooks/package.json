@@ -4,11 +4,12 @@
   "private": true,
   "type": "module",
   "bin": {
-    "officehub-hook": "./src/cli.ts"
+    "officehub-hook": "./dist/cli.js"
   },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "pnpm build && vitest run"
   },
   "dependencies": { "@officehub/shared": "workspace:*" },
   "devDependencies": {

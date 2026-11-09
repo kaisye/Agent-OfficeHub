@@ -20,6 +20,12 @@ export async function membersByGithub(login: string) {
   return rows.map(mapMember);
 }
 
+/** Dev-login picker (the API exposes it only when DEV_LOGIN_ENABLED=true). */
+export async function devMembers() {
+  const rows = await appSql()`SELECT * FROM auth_dev_members()`;
+  return rows.map((r) => ({ id: r.id as string, displayName: r.display_name as string, workspaceSlug: r.workspace_slug as string, mascot: r.mascot }));
+}
+
 export type AgentAuth =
   | { ok: true; principal: Extract<Principal, { kind: "agent" }> }
   | { ok: false; reason: "unknown" | "revoked"; workspaceId?: string; agentId?: string; ownerId?: string };

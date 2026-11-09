@@ -1,28 +1,10 @@
 /**
- * Rule 8: per-agent token buckets (in-memory, per process).
+ * Rule 8: per-agent token buckets, stored in Postgres (table rate_buckets) so the API and the MCP server
+ * (separate processes) draw from the SAME buckets and restarts do not reset them.
+ * Each take is ONE atomic upsert (row lock serializes concurrent callers; refill uses the DB clock).
  * Defaults (Business): 60 req/min total, post_status 6/min, drafts (send_request + reply_draft) 20/hour.
  */
-export class TokenBucket {
-  private buckets = new Map<string, { tokens: number; at: number }>();
-  constructor(
-    private capacity: number,
-    private perMinute: number,
-    private now: () => number = Date.now,
-  ) {}
-
-  /** Returns 0 if allowed, otherwise seconds to wait. */
-  take(key: string): number {
-    const t = this.now();
-    const b = this.buckets.get(key) ?? { tokens: this.capacity, at: t };
-    b.tokens = Math.min(this.capacity, b.tokens + ((t - b.at) / 60000) * this.perMinute);
-    b.at = t;
-    let wait = 0;
-    if (b.tokens >= 1) b.tokens -= 1;
-    else wait = Math.max(1, Math.ceil(((1 - b.tokens) / this.perMinute) * 60));
-    this.buckets.set(key, b);
-    return wait;
-  }
-}
+import { appSql } from "./client.js";
 
 export type LimitKind = "any" | "status" | "draft";
 
@@ -30,27 +12,40 @@ export interface AgentLimiterOptions {
   perMinute?: number;
   statusPerMinute?: number;
   draftsPerHour?: number;
-  now?: () => number;
 }
 
 export class AgentRateLimiter {
-  private all: TokenBucket;
-  private status: TokenBucket;
-  private drafts: TokenBucket;
+  private cfg: Record<LimitKind, { capacity: number; perMinute: number }>;
   constructor(o: AgentLimiterOptions = {}) {
     const pm = o.perMinute ?? Number(process.env.AGENT_RATE_PER_MIN ?? 60);
     const sm = o.statusPerMinute ?? Number(process.env.AGENT_STATUS_PER_MIN ?? 6);
     const dh = o.draftsPerHour ?? Number(process.env.AGENT_DRAFTS_PER_HOUR ?? 20);
-    this.all = new TokenBucket(pm, pm, o.now);
-    this.status = new TokenBucket(sm, sm, o.now);
-    this.drafts = new TokenBucket(dh, dh / 60, o.now);
+    this.cfg = { any: { capacity: pm, perMinute: pm }, status: { capacity: sm, perMinute: sm }, draft: { capacity: dh, perMinute: dh / 60 } };
   }
+
+  /** Returns 0 if allowed, otherwise seconds to wait. */
+  private async take(agentId: string, kind: LimitKind): Promise<number> {
+    const { capacity, perMinute } = this.cfg[kind];
+    const [r] = await appSql()`
+      INSERT INTO rate_buckets AS b (key, tokens, updated_at, last_ok)
+      VALUES (${`${agentId}:${kind}`}, ${capacity - 1}, now(), ${capacity >= 1})
+      ON CONFLICT (key) DO UPDATE SET
+        tokens = CASE WHEN LEAST(${capacity}::float8, b.tokens + extract(epoch FROM (now() - b.updated_at)) / 60 * ${perMinute}::float8) >= 1
+                      THEN LEAST(${capacity}::float8, b.tokens + extract(epoch FROM (now() - b.updated_at)) / 60 * ${perMinute}::float8) - 1
+                      ELSE LEAST(${capacity}::float8, b.tokens + extract(epoch FROM (now() - b.updated_at)) / 60 * ${perMinute}::float8) END,
+        last_ok = LEAST(${capacity}::float8, b.tokens + extract(epoch FROM (now() - b.updated_at)) / 60 * ${perMinute}::float8) >= 1,
+        updated_at = now()
+      RETURNING tokens, last_ok`;
+    if (r!.last_ok) return 0;
+    return Math.max(1, Math.ceil(((1 - Number(r!.tokens)) / perMinute) * 60));
+  }
+
   /** @returns 0 when allowed, else retry-after seconds. */
-  check(agentId: string, kind: LimitKind = "any"): number {
-    const a = this.all.take(agentId);
+  async check(agentId: string, kind: LimitKind = "any"): Promise<number> {
+    const a = await this.take(agentId, "any");
     if (a) return a;
-    if (kind === "status") return this.status.take(agentId);
-    if (kind === "draft") return this.drafts.take(agentId);
+    if (kind === "status") return this.take(agentId, "status");
+    if (kind === "draft") return this.take(agentId, "draft");
     return 0;
   }
 }

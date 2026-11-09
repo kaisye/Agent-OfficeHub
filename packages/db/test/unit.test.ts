@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { randomUUID } from "node:crypto";
+import { afterAll, describe, expect, it } from "vitest";
+import { adminSql, closeAll } from "../src/client.js";
 import { canTransition, TRANSITIONS, RequestStatus, type RequestAction } from "@officehub/shared";
 import { scanText, scanFields } from "../src/secrets.js";
 import { AgentRateLimiter } from "../src/ratelimit.js";
@@ -54,17 +56,33 @@ describe("agent tokens", () => {
   });
 });
 
-describe("rate limiter", () => {
-  it("allows capacity then blocks, refills over time", () => {
-    let now = 0;
-    const l = new AgentRateLimiter({ perMinute: 3, draftsPerHour: 1, statusPerMinute: 1, now: () => now });
-    expect([l.check("a"), l.check("a"), l.check("a")]).toEqual([0, 0, 0]);
-    expect(l.check("a")).toBeGreaterThan(0);
-    expect(l.check("b")).toBe(0); // per-agent
-    now += 60000;
-    expect(l.check("a")).toBe(0);
-    expect(l.check("a", "draft")).toBe(0);
-    expect(l.check("a", "draft")).toBeGreaterThan(0); // draft bucket (1/min)
+describe("rate limiter (Postgres-backed, shared)", () => {
+  afterAll(closeAll);
+  it("allows capacity then blocks, per agent, refills over time (DB clock)", async () => {
+    const l = new AgentRateLimiter({ perMinute: 3, draftsPerHour: 1, statusPerMinute: 1 });
+    const a = randomUUID();
+    const b = randomUUID();
+    expect([await l.check(a), await l.check(a), await l.check(a)]).toEqual([0, 0, 0]);
+    expect(await l.check(a)).toBeGreaterThan(0);
+    expect(await l.check(b)).toBe(0); // per-agent
+    // time passes: backdate the buckets by 60s instead of mocking a clock
+    await adminSql()`UPDATE rate_buckets SET updated_at = updated_at - interval '60 seconds' WHERE key LIKE ${a + ":%"}`;
+    expect(await l.check(a, "draft")).toBe(0);
+    expect(await l.check(a, "draft")).toBeGreaterThan(0); // draft bucket (1/hour)
+  });
+  it("two limiter instances (API + MCP processes) share the same buckets", async () => {
+    const api = new AgentRateLimiter({ perMinute: 4 });
+    const mcp = new AgentRateLimiter({ perMinute: 4 });
+    const a = randomUUID();
+    expect([await api.check(a), await mcp.check(a), await api.check(a), await mcp.check(a)]).toEqual([0, 0, 0, 0]);
+    expect(await api.check(a)).toBeGreaterThan(0);
+    expect(await mcp.check(a)).toBeGreaterThan(0);
+  });
+  it("is atomic under concurrency: 30 parallel takes against capacity 10 allow exactly 10", async () => {
+    const l = new AgentRateLimiter({ perMinute: 10 });
+    const a = randomUUID();
+    const res = await Promise.all(Array.from({ length: 30 }, (_, i) => (i % 2 ? l : new AgentRateLimiter({ perMinute: 10 })).check(a)));
+    expect(res.filter((x) => x === 0).length).toBe(10);
   });
 });
 

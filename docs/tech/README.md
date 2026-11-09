@@ -53,11 +53,22 @@ curl -s -X POST http://localhost:8788/mcp -H "authorization: Bearer $TOKEN" \
 
 GitHub webhook: point a repo webhook (content type JSON, events: pull requests, check suites, workflow runs, issues, deployment statuses) at `POST /hooks/github/<workspaceId>` with secret `GITHUB_WEBHOOK_SECRET`.
 
+## API conventions the web depends on
+
+- **`secret_detected` message format (do not change)**: HTTP 422, `error.code = "secret_detected"`, and the message always contains `(rule: <id>)`, for example `Rejected: field "body" looks like a secret (rule: github-token). Nothing was stored. ...`. The web toast parses it with `/\(rule: ([\w.-]+)\)/`. Built in `packages/db/src/secrets.ts::secretError`; pinned by `apps/api/test/v03.test.ts`. The value itself is never echoed.
+- `GET /auth/dev-members` exists only when `DEV_LOGIN_ENABLED=true` (404 otherwise): `{id, displayName, workspaceSlug, mascot}[]` across all workspaces, for the login picker.
+- `GET /w/:slug/requests/:id` = same visibility and draft redaction as the list (404 for non-parties).
+- `POST .../read` returns `{ok:true}`; `DELETE /w/:slug/agents/:id` returns the revoked `Agent`.
+- Open-draft cap: an agent may hold at most 10 unsent draft requests; the 11th `send_request` fails with 429 `rate_limited` ("Too many open drafts ...").
+- Content trust labels are `self` | `untrusted`. Text from external systems (task titles from webhooks) has `authorMemberId: null` and `source: "github"` (or `jira` / `manual`).
+- SSE `change` kinds are exactly the shared `ChangeKind`.
+
 ## Layout
 
 | Path | What |
 |---|---|
-| `packages/db/migrations/000*.sql` | schema, RLS + roles + append-only triggers + auth lookup functions, NOTIFY triggers, v0.2 additions |
+| `packages/db/migrations/000*.sql` | schema, RLS + roles + append-only triggers + auth lookup functions, NOTIFY triggers, v0.2 additions, 0005 (v0.3: `rate_buckets`, `auth_dev_members()`) |
+| `packages/db/src/ratelimit.ts` | Postgres-backed shared rate-limit buckets |
 | `packages/db/src/client.ts` | admin vs app connections, `withWorkspace()` |
 | `packages/db/src/requests.ts` | request state machine glue, visibility (C13), unread, inbox |
 | `packages/db/src/services.ts` | board, status (self only), decisions (human only), agents, audit, handoff |

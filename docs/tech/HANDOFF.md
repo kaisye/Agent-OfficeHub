@@ -1,6 +1,6 @@
 # Backend / Technical — HANDOFF
 
-Built against contract v0.2 (`packages/shared`, merged from main 9551833). Tests: db 37, api 14, mcp 12, agent-hooks 2 = 65 passing against the docker Postgres; `tsc` clean in all four packages.
+Round 2: built against contract v0.3. Tests: db 47, api 22, mcp 16, agent-hooks 6 = 91 passing against the docker Postgres; `tsc` clean. New migration `0005_v03.sql` (additive; run `pnpm db:migrate`). See "Round 2 changes" at the bottom.
 
 ## Built (works, tested)
 - `packages/db`: raw SQL migrations 0001-0004 + runner, `withWorkspace()`, RLS on all tenant tables with non-superuser `officehub_app`, append-only `events`/`audit_log` (grants + triggers), NOTIFY triggers, seed (loads `docs/business/seed-tripflix.json`, falls back to a built-in Tripflix seed), services shared by API and MCP.
@@ -12,8 +12,6 @@ Built against contract v0.2 (`packages/shared`, merged from main 9551833). Tests
 ## Mocked / not verified
 - GitHub OAuth callback is implemented but untested (no real client id); only dev-login is covered by tests.
 - Codex/Gemini config snippets follow their documented shapes but were not run against live installs.
-- Rate limits are in-memory per process (API and MCP do not share buckets; restart resets).
-- No "10 open drafts" cap (Business permissions matrix mentions it for `send_request`): only the 20/hour limit is enforced.
 - No Jira/CI/deploy connectors besides the GitHub webhook. `check_suite`/`workflow_run` link to a PR task only when the payload lists `pull_requests`.
 - Reminders: first at due time, then every 24 working hours (Mon-Fri 09-12, 13-18, UTC+7); in-process interval, no admin summary digest, no chat notification (events only: `request.reminded`).
 - Sessions have no sliding expiry or "log out everywhere".
@@ -58,3 +56,12 @@ Built against contract v0.2 (`packages/shared`, merged from main 9551833). Tests
 - Should `list_inbox` mark as read automatically (current, per C8 "counts as read") or only on an explicit flag?
 - Root convenience (belongs to the Leader): add root scripts `"db:migrate": "pnpm --filter @officehub/db migrate"`, `"db:seed": "pnpm --filter @officehub/db seed"`, and a `dev` that excludes packages without a `dev` script (`pnpm -r --parallel dev` already skips them). `pnpm test` at the root runs the db-backed suites in parallel against one database; they use unique workspaces so this is safe.
 - Business matrix says `GET /w/:slug/audit` is admin-only; contract v0.2 says member sees own. We followed the contract.
+
+## Round 2 changes (contract v0.3)
+- Routes: `GET /auth/dev-members` (dev only), `GET /w/:slug/requests/:id`, `markRead` -> `{ok:true}`, `revokeAgent` -> `Agent`, `/me` + dev-login validated against `Me`. Audit `targetId` is the raw string. Every message has `authorMemberId`.
+- MCP registers input schemas from shared `McpToolInputs` (our `.describe()` texts layered on top). Task titles in `read_board` are `{trust:"untrusted", authorMemberId:null, source:"github"}` (never "self", even for your own PR). SSE `change.kind` is validated against `ChangeKind`.
+- Rate limits live in Postgres (`rate_buckets`), shared by API and MCP; 10-open-drafts-per-agent cap (429 `rate_limited`).
+- Visibility: the handoff pack leaked titles/status/timeline of requests the viewer was not party to (fixed, tested). Board/SSE/MCP were already filtered; tests now pin that, and that `request.*` events carry ids only.
+- Hooks: `apps/agent-hooks` builds to `dist/cli.js` (`pnpm --filter @officehub/agent-hooks build`); exact settings in `agent-setup.md`.
+- `secret_detected` message keeps `(rule: <id>)`; documented in README.
+- Not done: rate bucket rows are never purged; the hook is only exercised against stub + real API, not inside a live Claude Code session.
