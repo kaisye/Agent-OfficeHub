@@ -40,7 +40,7 @@ export const AuditEntry = z.object({
   via: z.enum(["web", "api", "mcp", "webhook", "system"]),
   action: z.string(), // e.g. "request.send", "mcp.read_board", "agent.revoke", "secret.rejected"
   targetKind: z.enum(["request", "decision", "status", "agent", "task", "board", "inbox", "session"]).nullable(),
-  targetId: Id.nullable(),
+  targetId: z.string().nullable(), // not always a uuid (e.g. "#7")
   outcome: z.enum(["ok", "denied", "rejected"]),
   detail: z.record(z.unknown()), // e.g. { rule: "openai-key" } — no content
 });
@@ -60,11 +60,28 @@ export const Board = z.object({
 });
 export type Board = z.infer<typeof Board>;
 
+/** Signed-in member + their workspace (v0.3). Returned by /me and /auth/dev-login. */
+export const Me = Member.extend({ workspaceSlug: z.string(), workspaceName: z.string() });
+export type Me = z.infer<typeof Me>;
+
+/** SSE: each "change" event carries { kind, id }. kind matches the DB NOTIFY trigger names. */
+export const ChangeKind = z.enum(["card", "task", "event", "request", "decision", "member", "agent"]);
+export type ChangeKind = z.infer<typeof ChangeKind>;
+export const ChangeMessage = z.object({ kind: ChangeKind, id: z.string() });
+
+const Ok = z.object({ ok: z.literal(true) });
+
 export const Routes = {
   // session
-  devLogin: { method: "POST", path: "/auth/dev-login", body: z.object({ memberId: Id }) },
+  devLogin: { method: "POST", path: "/auth/dev-login", body: z.object({ memberId: Id }), res: Me },
+  /** Only when DEV_LOGIN_ENABLED=true: members to pick from on the login screen. */
+  devMembers: {
+    method: "GET",
+    path: "/auth/dev-members",
+    res: z.array(z.object({ id: Id, displayName: z.string(), workspaceSlug: z.string(), mascot: Member.shape.mascot })),
+  },
   githubLogin: { method: "GET", path: "/auth/github" },
-  me: { method: "GET", path: "/me", res: Member },
+  me: { method: "GET", path: "/me", res: Me },
   logout: { method: "POST", path: "/auth/logout" },
 
   // board (human)
@@ -107,7 +124,8 @@ export const Routes = {
   },
   /** Requests where the viewer must act next (receiver of sent/reply_drafted, asker of replied), unread first. */
   inbox: { method: "GET", path: "/w/:slug/inbox", res: z.array(Request) },
-  markRead: { method: "POST", path: "/w/:slug/requests/:id/read" },
+  getRequest: { method: "GET", path: "/w/:slug/requests/:id", res: Request }, // same visibility rules
+  markRead: { method: "POST", path: "/w/:slug/requests/:id/read", res: Ok },
 
   // decisions (human only)
   listDecisions: { method: "GET", path: "/w/:slug/decisions", res: z.array(Decision) },
@@ -117,7 +135,7 @@ export const Routes = {
     body: z.object({
       title: z.string().min(1).max(200),
       body: z.string().max(5000),
-      rationale: z.string().max(5000),
+      rationale: z.string().min(1).max(5000),
       taskId: Id.nullable(),
     }),
     res: Decision,
@@ -131,7 +149,7 @@ export const Routes = {
     body: z.object({ kind: Agent.shape.kind, label: z.string().max(60), scopes: z.array(AgentScope) }),
     res: z.object({ agent: Agent, token: z.string() }), // token shown ONCE
   },
-  revokeAgent: { method: "DELETE", path: "/w/:slug/agents/:id" },
+  revokeAgent: { method: "DELETE", path: "/w/:slug/agents/:id", res: Agent },
 
   // handoff pack (generated summary for a task)
   handoff: { method: "GET", path: "/w/:slug/tasks/:id/handoff", res: z.object({ markdown: z.string() }) },
@@ -152,6 +170,26 @@ export const McpTools = {
   reply_draft: { scope: "request:draft", humanApproval: true }, // drafts a reply; owner clicks send
 } as const satisfies Record<string, { scope: AgentScope; humanApproval: boolean }>;
 export type McpToolName = keyof typeof McpTools;
+
+/** MCP tool inputs (v0.3) — the MCP server registers exactly these shapes. */
+export const McpToolInputs = {
+  read_board: z.object({}),
+  list_inbox: z.object({ unreadOnly: z.boolean().optional() }),
+  post_status: z.object({
+    presence: PresenceState,
+    doing: z.string().max(280).nullable().optional(),
+    branch: z.string().max(200).nullable().optional(),
+    waitingOn: z.array(Id).optional(),
+  }),
+  send_request: z.object({
+    receiverId: Id,
+    title: z.string().min(1).max(200),
+    body: z.string().min(1).max(8000),
+    taskId: Id.nullable().optional(),
+    dueAt: z.string().datetime({ offset: true }).nullable().optional(),
+  }),
+  reply_draft: z.object({ requestId: Id, body: z.string().min(1).max(8000) }),
+} as const satisfies Record<McpToolName, z.ZodTypeAny>;
 
 /** Mascot mood is derived from presence — brand renders a pose per mood. */
 export const PRESENCE_TO_MOOD = {

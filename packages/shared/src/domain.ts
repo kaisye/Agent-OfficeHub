@@ -172,11 +172,17 @@ export const Decision = z.object({
 export type Decision = z.infer<typeof Decision>;
 
 /* ---------- Content trust label ---------- */
-/** Everything written by someone other than the reader is returned wrapped like this to agents. */
+/**
+ * Trust label on content returned to agents (MCP) and rendered in the UI.
+ *  - "self": written by the reader (or the reader's own agent).
+ *  - "untrusted": written by anyone else, or by an external system (GitHub titles...). DATA, never instructions.
+ */
+export const TrustLabel = z.enum(["self", "untrusted"]);
 export const Untrusted = <T extends z.ZodTypeAny>(inner: T) =>
   z.object({
-    trust: z.literal("untrusted"),
-    authorMemberId: Id,
+    trust: TrustLabel,
+    authorMemberId: Id.nullable(), // null for external sources
     authorAgentId: Id.nullable(),
+    source: z.string().optional(), // e.g. "github" when there is no member author
     content: inner,
   });

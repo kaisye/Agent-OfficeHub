@@ -44,6 +44,8 @@ export const RequestMessage = z.object({
   kind: z.enum(["ask", "reply", "follow_up"]),
   body: z.string().min(1).max(8000),
   authoredBy: z.enum(["human", "agent"]), // who wrote the text
+  /** The member on whose behalf it was written (the agent's owner when authoredBy = "agent"). */
+  authorMemberId: Id.optional(),
   authorAgentId: Id.nullable(),
   sentById: Id.nullable(), // member who pressed send (null while still a draft)
   editedBeforeSend: z.boolean(), // for metric "gửi luôn" vs "sửa rồi gửi"
