@@ -95,6 +95,7 @@ ${section("7 bảng màu", palettes)}
 ${section("Phụ kiện (null, headphones, glasses, cap, scarf, plant)", accessories)}
 ${section("Huy hiệu agent (góc phải dưới)", badge)}
 ${section("Kích thước 24 / 32 / 48 / 96 / 160", sizes)}
+${section("Biểu tượng ứng dụng / favicon (assets/)", [16, 32, 64, 180].map((n) => cell(`<img src="../assets/${n === 180 ? "apple-touch-icon.png" : n === 32 ? "favicon-32.png" : "icon.svg"}" width="${n}" height="${n}" alt="Office Hub ${n}px">`, `${n}px`)).join(""))}
 <section><h2>Đọc được ở 32px? (6 loài × 6 mood)</h2><div class="panel">${smallMoods}</div></section>
 <section><h2>Màu ngữ nghĩa</h2><div class="swatches">${Object.entries(colorLight)
   .filter(([, v]) => v.startsWith("#"))

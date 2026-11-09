@@ -1,7 +1,9 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { Member, Request } from "@officehub/shared";
-import { Dialog, Mascot, MemberCard, RequestCard, TokenRevealOnce, UntrustedQuote, availableActions, relativeTimeVi } from "./index.js";
+import { Dialog, Mascot, MemberCard, RequestCard, TaskChip, ToastProvider, TokenRevealOnce, UntrustedQuote, useToast, availableActions, relativeTimeVi } from "./index.js";
 
 afterEach(cleanup);
 
@@ -109,5 +111,157 @@ describe("misc components", () => {
     const now = new Date("2026-11-09T10:00:00Z");
     expect(relativeTimeVi("2026-11-09T09:55:00Z", now)).toBe("5 phút trước");
     expect(relativeTimeVi("2026-11-09T07:00:00Z", now)).toBe("3 giờ trước");
+  });
+});
+
+describe("Dialog", () => {
+  it("does not steal focus when onClose changes identity (regression)", () => {
+    function Host() {
+      const [v, setV] = useState("");
+      return (
+        <Dialog open onClose={() => setV("")} title="Tạo yêu cầu">
+          <input aria-label="Tiêu đề" value={v} onChange={(e) => setV(e.target.value)} />
+          <textarea aria-label="Nội dung" />
+        </Dialog>
+      );
+    }
+    render(<Host />);
+    const second = screen.getByLabelText("Nội dung");
+    second.focus();
+    fireEvent.change(screen.getByLabelText("Tiêu đề"), { target: { value: "a" } }); // re-render, new onClose
+    fireEvent.change(screen.getByLabelText("Tiêu đề"), { target: { value: "ab" } });
+    expect(document.activeElement).toBe(second);
+  });
+  it("calls the latest onClose on Escape", () => {
+    const first = vi.fn(), second = vi.fn();
+    const { rerender } = render(<Dialog open onClose={first} title="X" />);
+    rerender(<Dialog open onClose={second} title="X" />);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+  it("renders in a portal on document.body and returns focus to the opener", () => {
+    function Host() {
+      const [open, setOpen] = useState(false);
+      return (
+        <div id="host">
+          <button onClick={() => setOpen(true)}>Mở</button>
+          <Dialog open={open} onClose={() => setOpen(false)} title="Hộp thoại"><button>OK</button></Dialog>
+        </div>
+      );
+    }
+    render(<Host />);
+    const opener = screen.getByRole("button", { name: "Mở" });
+    opener.focus();
+    fireEvent.click(opener);
+    const dialog = screen.getByRole("dialog", { name: "Hộp thoại" });
+    expect(document.getElementById("host")!.contains(dialog)).toBe(false);
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(opener);
+  });
+});
+
+describe("TaskChip", () => {
+  const task = { source: "jira", externalKey: "TRIP-42", externalUrl: "https://x.test/TRIP-42", title: "Một tiêu đề rất rất dài cho việc này cần cắt bớt", state: "open" } as const;
+  it("keeps the key unbreakable and truncates the title with a full-text tooltip", () => {
+    render(<TaskChip task={task} />);
+    expect(screen.getByText("TRIP-42").className).toContain("whitespace-nowrap");
+    const t = screen.getByText(task.title);
+    expect(t.className).toContain("truncate");
+    expect(t.getAttribute("title")).toBe(task.title);
+  });
+});
+
+describe("UntrustedQuote external author", () => {
+  it("labels a null-author GitHub source", () => {
+    render(<UntrustedQuote authorMemberId={null} source="github">Review comment</UntrustedQuote>);
+    expect(screen.getByText("Từ GitHub · nội dung chưa xác minh")).toBeTruthy();
+    expect(screen.getByLabelText(/Nội dung từ GitHub, chưa xác minh/)).toBeTruthy();
+  });
+  it("shows the member name when there is one", () => {
+    render(<UntrustedQuote authorName="Bảo">x</UntrustedQuote>);
+    expect(screen.getByText("Từ Bảo · nội dung chưa xác minh")).toBeTruthy();
+  });
+});
+
+describe("RequestCard detail link", () => {
+  it("renders inside the card footer, with the card's own box", () => {
+    render(<RequestCard request={req("closed", { sentById: A })} asker={asker} receiver={receiver} viewerMemberId={A} detailHref="/w/x/requests/1" />);
+    const link = screen.getByRole("link", { name: "Mở chi tiết và chuỗi trao đổi" });
+    expect(link.getAttribute("href")).toBe("/w/x/requests/1");
+    expect(link.closest("article")).toBeTruthy();
+    expect(link.closest("footer")?.parentElement?.tagName).toBe("ARTICLE");
+  });
+  it("is absent without detailHref", () => {
+    render(<RequestCard request={req("closed", { sentById: A })} asker={asker} receiver={receiver} viewerMemberId={A} />);
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+});
+
+describe("screen reader semantics", () => {
+  it("MemberCard mascot reads 'Phong — đang làm'", () => {
+    render(<MemberCard member={receiver} status={{ memberId: B, presence: "working", doing: "x", branch: null, waitingOn: [], updatedAt: T, updatedBy: "human" }} />);
+    expect(screen.getByRole("img", { name: "Phong — đang làm" })).toBeTruthy();
+    expect(screen.getByRole("article", { name: "Phong — đang làm" })).toBeTruthy();
+  });
+  it("default mascot title is natural Vietnamese; decorative mascots are hidden", () => {
+    const { container } = render(<><Mascot mascot={asker.mascot} mood="focused" /><Mascot mascot={asker.mascot} decorative /></>);
+    expect(screen.getByRole("img", { name: "Linh vật mèo, đang làm" })).toBeTruthy();
+    expect(container.querySelectorAll("svg[aria-hidden='true']")).toHaveLength(1);
+    expect(screen.getAllByRole("img")).toHaveLength(1);
+  });
+  it("toasts: polite status region for info, assertive alert region for errors", () => {
+    function Fire() {
+      const toast = useToast();
+      return (
+        <>
+          <button onClick={() => toast("Đã lưu", "success")}>ok</button>
+          <button onClick={() => toast("Lỗi mạng", "danger")}>bad</button>
+        </>
+      );
+    }
+    render(<ToastProvider><Fire /></ToastProvider>);
+    const polite = screen.getByRole("status");
+    const alert = screen.getByRole("alert");
+    expect(polite.getAttribute("aria-live")).toBe("polite");
+    expect(alert.getAttribute("aria-live")).toBe("assertive");
+    act(() => { fireEvent.click(screen.getByText("ok")); fireEvent.click(screen.getByText("bad")); });
+    expect(polite.textContent).toContain("Đã lưu");
+    expect(alert.textContent).toContain("Lỗi mạng");
+    expect(screen.getAllByRole("status")).toHaveLength(1); // no nested live roles inside toasts
+  });
+});
+
+describe("module hygiene", () => {
+  const dir = `${process.cwd()}/src/`;
+  const files = readdirSync(dir).filter((f) => /\.tsx?$/.test(f) && !f.endsWith(".test.tsx"));
+  const text = (f: string) => readFileSync(dir + f, "utf8");
+  it('every module that uses hooks has "use client" as its first statement', () => {
+    for (const f of files) {
+      const src = text(f);
+      if (/\buse(State|Effect|Ref|Context|Id|Callback|Memo|Reducer)\b|createContext/.test(src)) {
+        expect(src.trimStart().startsWith('"use client"'), f).toBe(true);
+      }
+    }
+  });
+  it("logic modules stay server-safe", () => {
+    expect(text("request-logic.ts")).not.toMatch(/from "react"|^"use client"/m);
+  });
+  it("uses only the canonical surface token (oh-surface-2)", () => {
+    for (const f of files) expect(text(f), f).not.toMatch(/oh-surface2/);
+  });
+  it("every oh-* color utility exists in the brand theme", () => {
+    const theme = readFileSync(`${process.cwd()}/../brand/src/tailwind-theme.css`, "utf8");
+    const defined = new Set([...theme.matchAll(/--color-oh-([a-z0-9-]+):/g)].map((m) => m[1]));
+    for (const f of files) {
+      for (const m of text(f).matchAll(/\b(?:bg|text|border|ring|outline|fill|stroke)-oh-([a-z0-9-]+)/g)) {
+        const name = m[1]!;
+        // skip non-color utilities that share the prefix (text-oh-sm, outline-oh-..)
+        if (/^(xs|sm|base|lg|xl|2xl|3xl|4xl)$/.test(name)) continue;
+        expect(defined.has(name), `${f}: ${m[0]}`).toBe(true);
+      }
+    }
   });
 });
