@@ -14,7 +14,10 @@ export function Dialog({
   description,
   children,
   footer,
+  side,
 }: {
+  /** Render as a right-hand drawer (full width under 760px) instead of a centred modal. */
+  side?: boolean;
   open: boolean;
   onClose: () => void;
   title: string;
@@ -60,7 +63,7 @@ export function Dialog({
 
   if (!open || typeof document === "undefined") return null;
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "var(--oh-overlay)" }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className={cn("fixed inset-0 z-50 flex backdrop-blur-[3px]", side ? "justify-end" : "items-center justify-center p-4")} style={{ background: "var(--oh-overlay)" }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div
         ref={ref}
         role="dialog"
@@ -68,7 +71,7 @@ export function Dialog({
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}
         tabIndex={-1}
-        className="max-h-[calc(100dvh-2rem)] w-full max-w-lg animate-oh-pop overflow-y-auto rounded-oh-xl border border-oh-border bg-oh-surface p-6 text-oh-ink shadow-oh-lg outline-none"
+        className={cn("w-full animate-oh-pop overflow-y-auto border border-oh-border bg-oh-surface p-6 text-oh-ink shadow-oh-lg outline-none", side ? "h-dvh max-w-[480px] rounded-l-oh-xl border-r-0 max-[760px]:max-w-none max-[760px]:rounded-none sm:p-8" : "max-h-[calc(100dvh-2rem)] max-w-lg rounded-oh-xl")}
       >
         <div className="flex items-start justify-between gap-3">
           <h2 id={titleId} className="text-oh-xl font-semibold">{title}</h2>
@@ -83,6 +86,11 @@ export function Dialog({
     </div>,
     document.body,
   );
+}
+
+/** Side drawer (profile, request detail, task). Same a11y contract as Dialog. */
+export function Drawer(props: Omit<Parameters<typeof Dialog>[0], "side">) {
+  return <Dialog {...props} side />;
 }
 
 /* ---------- Toast ---------- */
@@ -105,7 +113,7 @@ export function Toast({ tone = "info", message, onDismiss, announce = true }: { 
     <div
       role={announce ? (tone === "danger" ? "alert" : "status") : undefined}
       data-tone={tone}
-      className={cn("flex animate-oh-pop items-center gap-2 rounded-oh-md border px-3 py-2 text-oh-sm shadow-oh-md", cls)}
+      className={cn("flex animate-oh-pop items-center gap-2 rounded-oh-lg border px-4 py-3 text-oh-sm shadow-oh-lg", cls)}
     >
       <Icon name={icon} size={16} />
       <span className="sr-only">{TONE_LABEL_VI[tone]}: </span>

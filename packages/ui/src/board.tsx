@@ -2,7 +2,8 @@ import type { EventType, HubEvent, Member, StatusCard, Task } from "@officehub/s
 
 type TaskState = Task["state"];
 import { Badge, Card, Icon, cn, type IconName } from "./primitives.js";
-import { Mascot, PRESENCE_LABEL_VI, PresencePill } from "./presence.js";
+import { BUDDIES } from "@officehub/brand";
+import { Mascot, PRESENCE_LABEL_VI, StatusBadge } from "./presence.js";
 import { safeExternalHref } from "./safe-url.js";
 
 /** "3 phút trước" style time. `now` is injectable for tests/SSR. */
@@ -70,11 +71,14 @@ export function MemberCard({
   const byAgent = status?.updatedBy === "agent";
   return (
     <Card as="article" interactive aria-label={`${member.displayName} — ${PRESENCE_LABEL_VI[presence].toLowerCase()}`} className={className}>
-      <div className="flex items-start gap-3">
-        <Mascot mascot={member.mascot} presence={presence} size={48} agentBadge={byAgent} title={`${member.displayName} — ${PRESENCE_LABEL_VI[presence].toLowerCase()}${byAgent ? " — agent soạn" : ""}`} />
-        <div className="min-w-0 flex-1">
+      <div className="flex items-end gap-3">
+        <span className="flex h-[72px] w-[72px] shrink-0 items-end justify-center rounded-t-[36px] rounded-b-oh-md pt-1" style={{ background: BUDDIES[member.mascot.buddy]?.tint }}>
+          <Mascot mascot={member.mascot} presence={presence} size={64} agentBadge={byAgent} title={`${member.displayName} — ${PRESENCE_LABEL_VI[presence].toLowerCase()}${byAgent ? " — agent soạn" : ""}`} />
+        </span>
+        <div className="min-w-0 flex-1 pb-1">
           <h3 className="truncate text-oh-base font-semibold">{member.displayName}</h3>
-          <PresencePill presence={presence} />
+          <p className="truncate text-oh-xs text-oh-ink-muted">{BUDDIES[member.mascot.buddy]?.name} · {BUDDIES[member.mascot.buddy]?.role}</p>
+          <StatusBadge presence={presence} className="mt-1" />
         </div>
       </div>
       <p className="mt-3 text-oh-sm text-oh-ink">{status?.doing ?? <span className="text-oh-ink-muted">Chưa có cập nhật.</span>}</p>
@@ -89,7 +93,7 @@ export function MemberCard({
         <ul className="mt-3 flex flex-wrap items-center gap-1.5" aria-label="Đang chờ">
           <li className="text-oh-xs text-oh-ink-muted">Chờ:</li>
           {waitingOnMembers.map((m) => (
-            <li key={m.id} className="inline-flex items-center gap-1 rounded-oh-full bg-oh-warning-soft py-0.5 pl-0.5 pr-2 text-oh-xs text-oh-warning-soft-fg">
+            <li key={m.id} className="inline-flex items-center gap-1 rounded-oh-sm bg-oh-warning-soft py-0.5 pl-0.5 pr-2 text-oh-xs text-oh-warning-soft-fg">
               <Mascot mascot={m.mascot} mood="relaxed" size={24} decorative />
               {m.displayName}
             </li>

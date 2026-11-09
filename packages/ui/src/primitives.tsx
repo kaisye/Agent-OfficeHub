@@ -78,7 +78,7 @@ export function Button({ variant = "secondary", size = "md", loading, icon, clas
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={cn(
-        "inline-flex items-center justify-center rounded-oh-md font-medium transition-colors duration-150 cursor-pointer",
+        "inline-flex items-center justify-center rounded-oh-md font-medium transition duration-150 cursor-pointer hover:-translate-y-px active:translate-y-0",
         "focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-oh-focus",
         "disabled:opacity-60 disabled:cursor-not-allowed",
         VARIANT[variant],
@@ -107,7 +107,7 @@ const TONE: Record<BadgeTone, string> = {
 export function Badge({ tone = "neutral", icon, children, className, ...rest }: HTMLAttributes<HTMLSpanElement> & { tone?: BadgeTone; icon?: IconName }) {
   return (
     <span
-      className={cn("inline-flex items-center gap-1 rounded-oh-full border px-2 py-0.5 text-oh-xs font-medium whitespace-nowrap", TONE[tone], className)}
+      className={cn("inline-flex items-center gap-1 rounded-oh-sm border px-2 py-0.5 text-oh-xs font-medium whitespace-nowrap", TONE[tone], className)}
       {...rest}
     >
       {icon && <Icon name={icon} size={12} />}
@@ -128,9 +128,9 @@ export function Card({
   return (
     <Tag
       className={cn(
-        "rounded-oh-lg bg-oh-surface text-oh-ink p-4 border shadow-oh-sm",
+        "rounded-oh-lg bg-oh-surface text-oh-ink p-4 border shadow-oh-md",
         dashed ? "border-dashed border-oh-agent" : "border-oh-border",
-        interactive && "transition-shadow hover:shadow-oh-md focus-within:shadow-oh-md",
+        interactive && "transition hover:-translate-y-0.5 hover:border-oh-border-strong focus-within:border-oh-border-strong",
         className,
       )}
       {...rest}
