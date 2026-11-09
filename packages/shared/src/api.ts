@@ -11,9 +11,45 @@ import { z } from "zod";
 import { Id, Member, StatusCard, Task, HubEvent, Decision, Agent, AgentScope, PresenceState, Workspace } from "./domain.js";
 import { Request, RequestAction } from "./request.js";
 
-export const ApiError = z.object({ error: z.object({ code: z.string(), message: z.string() }) });
+export const ApiErrorCode = z.enum([
+  "unauthenticated", // 401 — no/expired session or token
+  "token_revoked", // 401
+  "forbidden", // 403 — wrong workspace/role/side
+  "human_only", // 403 — agent token on a human route, or agent attempting a human-only action
+  "insufficient_scope", // 403 — agent token lacks the tool's scope
+  "not_found", // 404
+  "invalid_state", // 409 — transition not allowed from current status
+  "wrong_side", // 403 — e.g. receiver trying to accept
+  "validation_failed", // 400
+  "secret_detected", // 422 — message names the rule, never the value; nothing stored
+  "rate_limited", // 429
+  "csrf_failed", // 403
+  "bad_signature", // 401 — webhook signature mismatch
+  "internal", // 500
+]);
+export type ApiErrorCode = z.infer<typeof ApiErrorCode>;
+export const ApiError = z.object({ error: z.object({ code: ApiErrorCode, message: z.string() }) });
 
-/** Board = everything the main screen needs in one call. */
+/** Audit log entry (append-only). Never contains message bodies or secrets. */
+export const AuditEntry = z.object({
+  id: Id,
+  workspaceId: Id,
+  at: z.string().datetime({ offset: true }),
+  actorMemberId: Id.nullable(),
+  actorAgentId: Id.nullable(),
+  via: z.enum(["web", "api", "mcp", "webhook", "system"]),
+  action: z.string(), // e.g. "request.send", "mcp.read_board", "agent.revoke", "secret.rejected"
+  targetKind: z.enum(["request", "decision", "status", "agent", "task", "board", "inbox", "session"]).nullable(),
+  targetId: Id.nullable(),
+  outcome: z.enum(["ok", "denied", "rejected"]),
+  detail: z.record(z.unknown()), // e.g. { rule: "openai-key" } — no content
+});
+export type AuditEntry = z.infer<typeof AuditEntry>;
+
+/**
+ * Board = everything the main screen needs in one call.
+ * openRequests is FILTERED per viewer and drafts REDACTED per canSeeMessage (C13).
+ */
 export const Board = z.object({
   workspace: Workspace,
   members: z.array(Member),
@@ -65,9 +101,13 @@ export const Routes = {
   actOnRequest: {
     method: "POST",
     path: "/w/:slug/requests/:id/actions",
-    body: z.object({ action: RequestAction, body: z.string().max(8000).optional() }),
+    // body presence is validated server-side with bodyRequirement(action, status) (C6)
+    body: z.object({ action: RequestAction, body: z.string().min(1).max(8000).optional() }),
     res: Request,
   },
+  /** Requests where the viewer must act next (receiver of sent/reply_drafted, asker of replied), unread first. */
+  inbox: { method: "GET", path: "/w/:slug/inbox", res: z.array(Request) },
+  markRead: { method: "POST", path: "/w/:slug/requests/:id/read" },
 
   // decisions (human only)
   listDecisions: { method: "GET", path: "/w/:slug/decisions", res: z.array(Decision) },
@@ -100,7 +140,7 @@ export const Routes = {
   githubWebhook: { method: "POST", path: "/hooks/github/:workspaceId" },
 
   // audit
-  audit: { method: "GET", path: "/w/:slug/audit" },
+  audit: { method: "GET", path: "/w/:slug/audit", res: z.array(AuditEntry) }, // admin: all; member: own + own agents
 } as const;
 
 /** MCP tools (Streamable HTTP at http://localhost:8788/mcp). Names are fixed. */

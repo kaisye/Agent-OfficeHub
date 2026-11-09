@@ -38,10 +38,13 @@ export type PresenceState = z.infer<typeof PresenceState>;
  * Mascot = a member's visual identity. Generated procedurally by @officehub/brand
  * from these traits, so it is deterministic and needs no image upload.
  */
+export const MascotSpecies = z.enum(["blob", "cat", "owl", "bot", "fox", "bear"]);
+export const MascotPalette = z.enum(["sunrise", "ocean", "forest", "grape", "coral", "slate", "sand"]);
+export const MascotAccessory = z.enum(["headphones", "glasses", "cap", "scarf", "plant"]);
 export const Mascot = z.object({
-  species: z.string().min(1), // keys defined by @officehub/brand (e.g. "blob", "cat", "owl", "bot")
-  palette: z.string().min(1), // palette key from brand tokens
-  accessory: z.string().nullable(), // e.g. "headphones", "glasses", null
+  species: MascotSpecies,
+  palette: MascotPalette,
+  accessory: MascotAccessory.nullable(),
   seed: z.number().int().nonnegative(), // tie-breaker for small variations
 });
 export type Mascot = z.infer<typeof Mascot>;
@@ -85,7 +88,8 @@ export const Agent = z.object({
   kind: AgentKind,
   label: z.string().max(60),
   scopes: z.array(AgentScope),
-  tokenPrefix: z.string(), // first 8 chars for display; full token shown once, stored hashed
+  /** First 8 chars of the RANDOM part (after "oh_agent_") for display; full token shown once, stored as SHA-256. */
+  tokenPrefix: z.string().length(8),
   revokedAt: IsoDate.nullable(),
   lastSeenAt: IsoDate.nullable(),
 });
@@ -124,6 +128,7 @@ export const EventType = z.enum([
   "request.reply_drafted",
   "request.replied",
   "request.followed_up",
+  "request.reminded",
   "request.closed",
   "request.cancelled",
   "decision.recorded",
@@ -140,8 +145,13 @@ export const HubEvent = z.object({
   taskId: Id.nullable(),
   actorMemberId: Id.nullable(),
   actorAgentId: Id.nullable(),
+  /** request.* events MUST carry requestId (+ messageId when a message is involved);
+   *  decision.recorded MUST carry decisionId. See EventRefs. Never contains secrets or draft text. */
   data: z.record(z.unknown()),
 });
+export const EventRefs = z
+  .object({ requestId: Id, messageId: Id, decisionId: Id, prNumber: z.number().int(), url: z.string().url() })
+  .partial();
 export type HubEvent = z.infer<typeof HubEvent>;
 
 /* ---------- Decision (Quyết định) — humans only ---------- */
@@ -150,7 +160,7 @@ export const Decision = z.object({
   workspaceId: Id,
   title: z.string().max(200),
   body: z.string().max(5000), // nội dung
-  rationale: z.string().max(5000), // lý do
+  rationale: z.string().min(1).max(5000), // lý do — required
   decidedById: Id, // member — never an agent
   taskId: Id.nullable(),
   decidedAt: IsoDate,
