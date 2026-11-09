@@ -1,0 +1,91 @@
+import { ApiErrorCode, Routes, type Id } from "@officehub/shared";
+import { ApiClientError, type ApiClient, type ChangeEvent } from "./types";
+
+type RouteDef = { method: string; path: string };
+
+function fill(path: string, params: Record<string, string>) {
+  return path.replace(/:(\w+)/g, (_, k: string) => encodeURIComponent(params[k] ?? ""));
+}
+
+export interface HttpClientOptions {
+  baseUrl: string;
+  fetchImpl?: typeof fetch;
+  eventSourceImpl?: typeof EventSource;
+}
+
+/** Real API client: cookie session, CSRF header on writes, `{error:{code,message}}` parsed into ApiClientError. */
+export function createHttpClient(opts: HttpClientOptions): ApiClient {
+  const base = opts.baseUrl.replace(/\/$/, "");
+  const doFetch: typeof fetch = (...a) => (opts.fetchImpl ?? fetch)(...a);
+
+  async function call<T>(route: RouteDef, params: Record<string, string> = {}, body?: unknown): Promise<T> {
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (route.method !== "GET") headers["X-OfficeHub-CSRF"] = "1";
+    if (body !== undefined) headers["Content-Type"] = "application/json";
+    let res: Response;
+    try {
+      res = await doFetch(base + fill(route.path, params), {
+        method: route.method,
+        credentials: "include",
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    } catch {
+      throw new ApiClientError("network", "Chưa kết nối được. Thử lại sau nhé.");
+    }
+    if (!res.ok) {
+      let code: ApiClientError["code"] = "internal";
+      let message = `Lỗi ${res.status}`;
+      try {
+        const j = (await res.json()) as { error?: { code?: string; message?: string } };
+        const parsed = ApiErrorCode.safeParse(j.error?.code);
+        if (parsed.success) code = parsed.data;
+        if (j.error?.message) message = j.error.message;
+      } catch {
+        /* non-JSON error body */
+      }
+      throw new ApiClientError(code, message, res.status);
+    }
+    if (res.status === 204) return undefined as T;
+    const text = await res.text();
+    return (text ? JSON.parse(text) : undefined) as T;
+  }
+
+  const w = (slug: string, extra: Record<string, string> = {}) => ({ slug, ...extra });
+
+  return {
+    mode: "http",
+    me: () => call(Routes.me),
+    devLogin: async (memberId) => void (await call(Routes.devLogin, {}, { memberId })),
+    githubLoginUrl: () => base + Routes.githubLogin.path,
+    logout: async () => void (await call(Routes.logout)),
+    board: (slug) => call(Routes.board, w(slug)),
+    updateMyStatus: async (slug, input) => void (await call(Routes.updateMyStatus, w(slug), input)),
+    updateMyMascot: async (slug, input) => void (await call(Routes.updateMyMascot, w(slug), input)),
+    listRequests: (slug) => call(Routes.listRequests, w(slug)),
+    createRequest: (slug, input) => call(Routes.createRequest, w(slug), input),
+    actOnRequest: (slug, id, input) => call(Routes.actOnRequest, w(slug, { id }), input),
+    inbox: (slug) => call(Routes.inbox, w(slug)),
+    markRead: async (slug, id) => void (await call(Routes.markRead, w(slug, { id }))),
+    listDecisions: (slug) => call(Routes.listDecisions, w(slug)),
+    recordDecision: (slug, input) => call(Routes.recordDecision, w(slug), input),
+    listMyAgents: (slug) => call(Routes.listMyAgents, w(slug)),
+    createAgent: (slug, input) => call(Routes.createAgent, w(slug), input),
+    revokeAgent: async (slug, id: Id) => void (await call(Routes.revokeAgent, w(slug, { id }))),
+    handoff: (slug, id) => call(Routes.handoff, w(slug, { id })),
+    subscribe(slug, onChange) {
+      const ES = opts.eventSourceImpl ?? (typeof EventSource !== "undefined" ? EventSource : undefined);
+      if (!ES) return () => {};
+      const es = new ES(base + fill(Routes.stream.path, { slug }), { withCredentials: true });
+      es.addEventListener("change", (ev) => {
+        try {
+          const d = JSON.parse((ev as MessageEvent<string>).data) as { kind?: string; id?: string | null };
+          onChange({ kind: d.kind ?? "unknown", id: d.id ?? null } satisfies ChangeEvent);
+        } catch {
+          onChange({ kind: "unknown", id: null });
+        }
+      });
+      return () => es.close();
+    },
+  };
+}
