@@ -61,6 +61,9 @@ export const Request = z.object({
   status: RequestStatus,
   dueAt: IsoDate.nullable(),
   messages: z.array(RequestMessage),
+  /** Computed per viewer by the server (C8): true when it changed since the viewer last read it
+   *  (via web markRead, or via the viewer's agent calling list_inbox). */
+  unreadForViewer: z.boolean().optional(),
   createdAt: IsoDate,
   updatedAt: IsoDate,
 });
@@ -108,6 +111,51 @@ export function canTransition(
   return { ok: true, to: rule.to };
 }
 
-export const HUMAN_ONLY_ACTIONS = (Object.keys(TRANSITIONS) as RequestAction[]).filter(
+/**
+ * Body rules per action (contract change C6):
+ *  - draft_reply, follow_up: body REQUIRED.
+ *  - send_reply: body required when there is no reply draft (status "sent"); optional from
+ *    "reply_drafted" — if given and different from the draft, the draft is replaced and
+ *    editedBeforeSend = true.
+ *  - send: body optional — if given and different from the ask draft, editedBeforeSend = true.
+ *  - accept, cancel: body ignored.
+ */
+export function bodyRequirement(
+  action: RequestAction,
+  status: RequestStatus,
+): "required" | "optional" | "ignored" {
+  switch (action) {
+    case "draft_reply":
+    case "follow_up":
+      return "required";
+    case "send_reply":
+      return status === "sent" ? "required" : "optional";
+    case "send":
+      return "optional";
+    default:
+      return "ignored";
+  }
+}
+
+/**
+ * Visibility (contract change C13), enforced by the SERVER on every read (API, SSE, MCP):
+ *  - A request is visible to its asker, its receiver, and workspace admins (admins: read-only).
+ *  - Unsent drafts (messages with sentById === null) are visible ONLY to the side that owns them
+ *    (asker's ask/follow_up drafts → asker; reply drafts → receiver). Admins do not see drafts.
+ */
+export function canSeeMessage(
+  req: Pick<Request, "askerId" | "receiverId">,
+  msg: Pick<RequestMessage, "kind" | "sentById">,
+  viewerId: string,
+): boolean {
+  if (viewerId !== req.askerId && viewerId !== req.receiverId) {
+    return msg.sentById !== null; // admins: sent messages only (request-level check happens upstream)
+  }
+  if (msg.sentById !== null) return true;
+  const owner = msg.kind === "reply" ? req.receiverId : req.askerId;
+  return viewerId === owner;
+}
+
+export const HUMAN_ONLY_ACTIONS =(Object.keys(TRANSITIONS) as RequestAction[]).filter(
   (a) => TRANSITIONS[a].humanOnly,
 );
