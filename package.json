@@ -16,6 +16,7 @@
     "db:down": "docker compose down",
     "db:migrate": "pnpm --filter @officehub/db migrate",
     "db:seed": "pnpm --filter @officehub/db seed",
+    "db:invite": "pnpm --filter @officehub/db invite",
     "dev:api": "pnpm --filter @officehub/api dev",
     "dev:mcp": "pnpm --filter @officehub/mcp dev",
     "e2e": "pnpm --filter @officehub/e2e e2e",
