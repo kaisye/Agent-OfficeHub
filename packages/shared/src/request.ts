@@ -1,15 +1,17 @@
 /**
  * Request (Yêu cầu) and its state machine — the heart of the product.
  *
- * 6 steps, 4 human-only:
- *   1. compose      draft          (human or asker's agent)          -> "draft"
- *   2. send         draft -> sent  (HUMAN asker only)
- *   3. draft reply  sent -> reply_drafted (human or receiver's agent)
- *   4. send reply   reply_drafted|sent -> replied (HUMAN receiver only)
- *   5a. accept      replied -> closed  (HUMAN asker only)
- *   5b. follow up   replied -> sent    (HUMAN asker only; goes back to receiver's agent)
- * Plus: cancel (HUMAN asker, from draft|sent|reply_drafted) -> cancelled.
- * Overdue requests are NEVER auto-closed; both sides get reminded.
+ * v0.6: the two sides are PARTIES — a role (its agents) or the human orchestrator (roleId = null).
+ * The orchestrator is the approval gate for every step marked HUMAN:
+ *   1. compose      draft          (orchestrator, or an agent of the asking role)      -> "draft"
+ *   2. send         draft -> sent  (HUMAN — "Chuyển"; optionally autoForwardReply for kind "question")
+ *   3. draft reply  sent -> reply_drafted (orchestrator, or an agent of the receiving role)
+ *   4. send reply   reply_drafted|sent -> replied (HUMAN — skipped when autoForwardReply was approved at step 2)
+ *   5a. accept      replied -> closed  (HUMAN)
+ *   5b. follow up   replied -> sent    (HUMAN; goes back to the receiving role)
+ * Plus: cancel (HUMAN, from draft|sent|reply_drafted) -> cancelled.
+ * No path lets an agent's text reach another role without an orchestrator click (or its pre-approval at step 2).
+ * Overdue requests are NEVER auto-closed.
  */
 import { z } from "zod";
 import { Id, IsoDate } from "./domain.js";
@@ -34,9 +36,17 @@ export const RequestAction = z.enum([
 ]);
 export type RequestAction = z.infer<typeof RequestAction>;
 
-export type Actor =
-  | { kind: "human"; memberId: string }
-  | { kind: "agent"; agentId: string; ownerId: string };
+/** v0.6: what the request is for. contract_change always goes to the Leader role. */
+export const RequestKind = z.enum(["question", "contract_change", "review", "handoff", "blocker"]);
+export type RequestKind = z.infer<typeof RequestKind>;
+/** Only plain questions may be approved in one click (reply auto-forwarded). Everything else needs both clicks. */
+export const canAutoForward = (kind: RequestKind) => kind === "question";
+
+/** The orchestrator acts as a human; an agent acts for its role. */
+export type Actor = { kind: "human"; memberId: string } | { kind: "agent"; agentId: string; roleId: string };
+
+/** Who reads a request: the orchestrator sees everything; a role sees requests it is a party to. */
+export type Viewer = { kind: "human" } | { kind: "role"; roleId: string };
 
 export const RequestMessage = z.object({
   id: Id,
@@ -44,8 +54,10 @@ export const RequestMessage = z.object({
   kind: z.enum(["ask", "reply", "follow_up"]),
   body: z.string().min(1).max(8000),
   authoredBy: z.enum(["human", "agent"]), // who wrote the text
-  /** The member on whose behalf it was written (the agent's owner when authoredBy = "agent"). */
-  authorMemberId: Id.optional(),
+  /** Set when a human wrote it (the orchestrator). */
+  authorMemberId: Id.nullable().optional(),
+  /** v0.6: set when an agent wrote it — the role it spoke for. */
+  authorRoleId: Id.nullable(),
   authorAgentId: Id.nullable(),
   sentById: Id.nullable(), // member who pressed send (null while still a draft)
   editedBeforeSend: z.boolean(), // for metric "gửi luôn" vs "sửa rồi gửi"
@@ -56,8 +68,12 @@ export type RequestMessage = z.infer<typeof RequestMessage>;
 export const Request = z.object({
   id: Id,
   workspaceId: Id,
-  askerId: Id,
-  receiverId: Id,
+  /** v0.6 parties: a role id, or null for the human orchestrator. Never both null; never equal. */
+  askerRoleId: Id.nullable(),
+  receiverRoleId: Id.nullable(),
+  kind: RequestKind,
+  /** Approved at "send": the receiver's reply draft is forwarded without a second click (kind "question" only). */
+  autoForwardReply: z.boolean(),
   taskId: Id.nullable(),
   title: z.string().min(1).max(200),
   status: RequestStatus,
@@ -92,9 +108,13 @@ export type TransitionResult =
   | { ok: true; to: RequestStatus }
   | { ok: false; code: "invalid_state" | "human_only" | "wrong_side"; message: string };
 
-/** Pure guard. Server MUST call this; UI uses it to show/hide buttons. */
+/**
+ * Pure guard. Server MUST call this; UI uses it to show/hide buttons.
+ * The orchestrator may perform any action (it is the gate for both sides). An agent may only perform the
+ * non-human steps, and only on the side its role holds.
+ */
 export function canTransition(
-  req: Pick<Request, "status" | "askerId" | "receiverId">,
+  req: Pick<Request, "status" | "askerRoleId" | "receiverRoleId">,
   action: RequestAction,
   actor: Actor,
 ): TransitionResult {
@@ -103,14 +123,20 @@ export function canTransition(
     return { ok: false, code: "invalid_state", message: `Cannot ${action} from ${req.status}` };
   }
   if (rule.humanOnly && actor.kind !== "human") {
-    return { ok: false, code: "human_only", message: `${action} requires a human click` };
+    return { ok: false, code: "human_only", message: `${action} requires the orchestrator's click` };
   }
-  const actingMember = actor.kind === "human" ? actor.memberId : actor.ownerId;
-  const sideMember = rule.side === "asker" ? req.askerId : req.receiverId;
-  if (actingMember !== sideMember) {
-    return { ok: false, code: "wrong_side", message: `${action} is for the ${rule.side}` };
+  if (actor.kind === "agent") {
+    const sideRole = rule.side === "asker" ? req.askerRoleId : req.receiverRoleId;
+    if (sideRole !== actor.roleId) {
+      return { ok: false, code: "wrong_side", message: `${action} is for the ${rule.side} role` };
+    }
   }
   return { ok: true, to: rule.to };
+}
+
+/** True when the viewer's role is one side of the request (the orchestrator is a party to everything). */
+export function isParty(req: Pick<Request, "askerRoleId" | "receiverRoleId">, viewer: Viewer): boolean {
+  return viewer.kind === "human" || viewer.roleId === req.askerRoleId || viewer.roleId === req.receiverRoleId;
 }
 
 /**
@@ -140,22 +166,21 @@ export function bodyRequirement(
 }
 
 /**
- * Visibility (contract change C13), enforced by the SERVER on every read (API, SSE, MCP):
- *  - A request is visible to its asker, its receiver, and workspace admins (admins: read-only).
- *  - Unsent drafts (messages with sentById === null) are visible ONLY to the side that owns them
- *    (asker's ask/follow_up drafts → asker; reply drafts → receiver). Admins do not see drafts.
+ * Visibility (C13, v0.6), enforced by the SERVER on every read (API, SSE, MCP):
+ *  - The orchestrator sees every request and every draft (it approves them).
+ *  - A role sees requests it is a party to. Unsent drafts are visible only to the side that owns them
+ *    (ask/follow_up drafts → asker role; reply drafts → receiver role). The other role never sees unapproved text.
  */
 export function canSeeMessage(
-  req: Pick<Request, "askerId" | "receiverId">,
+  req: Pick<Request, "askerRoleId" | "receiverRoleId">,
   msg: Pick<RequestMessage, "kind" | "sentById">,
-  viewerId: string,
+  viewer: Viewer,
 ): boolean {
-  if (viewerId !== req.askerId && viewerId !== req.receiverId) {
-    return msg.sentById !== null; // admins: sent messages only (request-level check happens upstream)
-  }
+  if (viewer.kind === "human") return true;
+  if (!isParty(req, viewer)) return false;
   if (msg.sentById !== null) return true;
-  const owner = msg.kind === "reply" ? req.receiverId : req.askerId;
-  return viewerId === owner;
+  const owner = msg.kind === "reply" ? req.receiverRoleId : req.askerRoleId;
+  return viewer.roleId === owner;
 }
 
 export const HUMAN_ONLY_ACTIONS =(Object.keys(TRANSITIONS) as RequestAction[]).filter(

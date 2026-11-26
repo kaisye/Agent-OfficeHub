@@ -86,25 +86,26 @@ describe("rate limiter (Postgres-backed, shared)", () => {
   });
 });
 
-describe("request transitions (shared canTransition)", () => {
+describe("request transitions (shared canTransition, v0.6)", () => {
   const statuses = RequestStatus.options;
   const actions = Object.keys(TRANSITIONS) as RequestAction[];
-  it("an agent can never perform a human-only action from any state", () => {
+  it("an agent can never perform an orchestrator-only action from any state, on either side", () => {
     for (const status of statuses)
       for (const a of actions) {
         if (!TRANSITIONS[a].humanOnly) continue;
-        const side = TRANSITIONS[a].side;
-        const r = canTransition({ status, askerId: "A", receiverId: "R" }, a, { kind: "agent", agentId: "x", ownerId: side === "asker" ? "A" : "R" });
-        expect(r.ok).toBe(false);
+        for (const roleId of ["A", "R"]) {
+          const r = canTransition({ status, askerRoleId: "A", receiverRoleId: "R" }, a, { kind: "agent", agentId: "x", roleId });
+          expect(r.ok).toBe(false);
+        }
       }
   });
-  it("only the receiver's agent may draft a reply", () => {
-    const req = { status: "sent" as const, askerId: "A", receiverId: "R" };
-    expect(canTransition(req, "draft_reply", { kind: "agent", agentId: "x", ownerId: "R" }).ok).toBe(true);
-    expect(canTransition(req, "draft_reply", { kind: "agent", agentId: "x", ownerId: "A" }).ok).toBe(false);
+  it("only the receiving role's agent may draft a reply", () => {
+    const req = { status: "sent" as const, askerRoleId: "A", receiverRoleId: "R" };
+    expect(canTransition(req, "draft_reply", { kind: "agent", agentId: "x", roleId: "R" }).ok).toBe(true);
+    expect(canTransition(req, "draft_reply", { kind: "agent", agentId: "x", roleId: "A" }).ok).toBe(false);
   });
   it("closed/cancelled are terminal", () => {
     for (const status of ["closed", "cancelled"] as const)
-      for (const a of actions) expect(canTransition({ status, askerId: "A", receiverId: "R" }, a, { kind: "human", memberId: "A" }).ok).toBe(false);
+      for (const a of actions) expect(canTransition({ status, askerRoleId: "A", receiverRoleId: "R" }, a, { kind: "human", memberId: "H" }).ok).toBe(false);
   });
 });

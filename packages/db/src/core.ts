@@ -6,7 +6,7 @@ import { HubError } from "./errors.js";
 
 export type Principal =
   | { kind: "human"; workspaceId: string; memberId: string; role: "admin" | "member" }
-  | { kind: "agent"; workspaceId: string; agentId: string; ownerId: string; scopes: AgentScope[] };
+  | { kind: "agent"; workspaceId: string; agentId: string; ownerId: string; roleId: string; scopes: AgentScope[] };
 
 /** The member whose identity the action is performed for (a human, or the agent's owner). */
 export const principalMemberId = (p: Principal) => (p.kind === "human" ? p.memberId : p.ownerId);
@@ -33,14 +33,27 @@ export const mapMember = (r: Row) => ({
   areas: r.areas,
   mascot: r.mascot,
 });
+export const mapRole = (r: Row) => ({
+  id: r.id as string,
+  workspaceId: r.workspace_id as string,
+  key: r.key as string,
+  name: r.name as string,
+  mission: r.mission as string,
+  ownedPaths: r.owned_paths as string[],
+  handoffPath: (r.handoff_path as string | null) ?? null,
+  wave: r.wave as number,
+  mascot: r.mascot,
+});
 export const mapCard = (r: Row) => ({
-  memberId: r.member_id,
+  roleId: r.role_id,
   presence: r.presence,
   doing: r.doing,
   branch: r.branch,
+  paths: r.paths,
   waitingOn: r.waiting_on,
   updatedAt: isoReq(r.updated_at),
   updatedBy: r.updated_by,
+  updatedByAgentId: r.updated_by_agent_id ?? null,
 });
 export const mapTask = (r: Row) => ({
   id: r.id,
@@ -49,7 +62,7 @@ export const mapTask = (r: Row) => ({
   externalUrl: r.external_url,
   externalKey: r.external_key,
   title: r.title,
-  assigneeId: r.assignee_id,
+  roleId: r.role_id ?? null,
   state: r.state,
   syncedAt: iso(r.synced_at),
 });
@@ -73,12 +86,28 @@ export const mapDecision = (r: Row) => ({
   rationale: r.rationale,
   decidedById: r.decided_by_id,
   taskId: r.task_id,
+  roleIds: (r.role_ids as string[] | null) ?? [],
+  proposalId: r.proposal_id ?? null,
   decidedAt: isoReq(r.decided_at),
+});
+export const mapProposal = (r: Row) => ({
+  id: r.id as string,
+  workspaceId: r.workspace_id as string,
+  roleId: r.role_id as string,
+  agentId: r.agent_id as string,
+  title: r.title as string,
+  body: r.body as string,
+  rationale: r.rationale as string,
+  status: r.status as "pending" | "accepted" | "rejected",
+  decisionId: (r.decision_id as string | null) ?? null,
+  createdAt: isoReq(r.created_at),
+  resolvedAt: iso(r.resolved_at),
 });
 export const mapAgent = (r: Row) => ({
   id: r.id,
   workspaceId: r.workspace_id,
   ownerId: r.owner_id,
+  roleId: r.role_id,
   kind: r.kind,
   label: r.label,
   scopes: r.scopes,

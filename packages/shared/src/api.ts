@@ -8,8 +8,8 @@
  *    the /agent/* routes, never by human action routes (send/accept/decide...).
  */
 import { z } from "zod";
-import { Id, Member, StatusCard, Task, HubEvent, Decision, Agent, AgentScope, PresenceState, Workspace } from "./domain.js";
-import { Request, RequestAction } from "./request.js";
+import { Id, Member, StatusCard, Task, HubEvent, Decision, DecisionProposal, Agent, AgentScope, PresenceState, Role, RoleKey, Mascot, Workspace } from "./domain.js";
+import { Request, RequestAction, RequestKind } from "./request.js";
 
 export const ApiErrorCode = z.enum([
   "unauthenticated", // 401 — no/expired session or token
@@ -39,7 +39,7 @@ export const AuditEntry = z.object({
   actorAgentId: Id.nullable(),
   via: z.enum(["web", "api", "mcp", "webhook", "system"]),
   action: z.string(), // e.g. "request.send", "mcp.read_board", "agent.revoke", "secret.rejected"
-  targetKind: z.enum(["request", "decision", "status", "agent", "task", "board", "inbox", "session"]).nullable(),
+  targetKind: z.enum(["request", "decision", "proposal", "role", "status", "agent", "task", "board", "inbox", "session"]).nullable(),
   targetId: z.string().nullable(), // not always a uuid (e.g. "#7")
   outcome: z.enum(["ok", "denied", "rejected"]),
   detail: z.record(z.unknown()), // e.g. { rule: "openai-key" } — no content
@@ -47,16 +47,18 @@ export const AuditEntry = z.object({
 export type AuditEntry = z.infer<typeof AuditEntry>;
 
 /**
- * Board = everything the main screen needs in one call.
+ * Board = everything the main screen needs in one call (v0.6: one orchestrator + role seats).
  * openRequests is FILTERED per viewer and drafts REDACTED per canSeeMessage (C13).
  */
 export const Board = z.object({
   workspace: Workspace,
-  members: z.array(Member),
-  cards: z.array(StatusCard),
+  orchestrator: Member,
+  roles: z.array(Role), // ordered by wave, then name
+  cards: z.array(StatusCard), // one per role at most
   tasks: z.array(Task),
   recentEvents: z.array(HubEvent), // newest first, max 50
   openRequests: z.array(Request), // not closed/cancelled
+  pendingProposals: z.array(DecisionProposal),
 });
 export type Board = z.infer<typeof Board>;
 
@@ -65,7 +67,7 @@ export const Me = Member.extend({ workspaceSlug: z.string(), workspaceName: z.st
 export type Me = z.infer<typeof Me>;
 
 /** SSE: each "change" event carries { kind, id }. kind matches the DB NOTIFY trigger names. */
-export const ChangeKind = z.enum(["card", "task", "event", "request", "decision", "member", "agent"]);
+export const ChangeKind = z.enum(["card", "task", "event", "request", "decision", "proposal", "role", "member", "agent"]);
 export type ChangeKind = z.infer<typeof ChangeKind>;
 export const ChangeMessage = z.object({ kind: ChangeKind, id: z.string() });
 
@@ -127,10 +129,29 @@ export const Routes = {
   board: { method: "GET", path: "/w/:slug/board", res: Board },
   stream: { method: "GET", path: "/w/:slug/stream" }, // SSE: event "change" with { kind, id }
 
-  // status (human, self)
-  updateMyStatus: {
+  updateMyMascot: { method: "PUT", path: "/w/:slug/me/mascot", body: Member.shape.mascot },
+
+  // roles (v0.6, orchestrator only)
+  listRoles: { method: "GET", path: "/w/:slug/roles", res: z.array(Role) },
+  updateRole: {
     method: "PUT",
-    path: "/w/:slug/status",
+    path: "/w/:slug/roles/:id",
+    body: z
+      .object({
+        name: Role.shape.name,
+        mission: Role.shape.mission,
+        ownedPaths: Role.shape.ownedPaths,
+        handoffPath: Role.shape.handoffPath,
+        wave: Role.shape.wave,
+        mascot: Mascot,
+      })
+      .partial(),
+    res: Role,
+  },
+  /** The orchestrator may set a role's card by hand (e.g. mark it offline). */
+  updateRoleStatus: {
+    method: "PUT",
+    path: "/w/:slug/roles/:id/status",
     body: z.object({
       presence: PresenceState,
       doing: z.string().max(280).nullable(),
@@ -138,15 +159,16 @@ export const Routes = {
       waitingOn: z.array(Id),
     }),
   },
-  updateMyMascot: { method: "PUT", path: "/w/:slug/me/mascot", body: Member.shape.mascot },
 
   // requests (human)
   listRequests: { method: "GET", path: "/w/:slug/requests", res: z.array(Request) },
+  /** The orchestrator assigns work to a role: created already "sent" (the orchestrator wrote it). */
   createRequest: {
     method: "POST",
     path: "/w/:slug/requests",
     body: z.object({
-      receiverId: Id,
+      receiverRoleId: Id,
+      kind: RequestKind.default("question"),
       title: z.string().min(1).max(200),
       body: z.string().min(1).max(8000),
       taskId: Id.nullable(),
@@ -158,11 +180,24 @@ export const Routes = {
     method: "POST",
     path: "/w/:slug/requests/:id/actions",
     // body presence is validated server-side with bodyRequirement(action, status) (C6)
-    body: z.object({ action: RequestAction, body: z.string().min(1).max(8000).optional() }),
+    // autoForwardReply: only with action "send" on kind "question" (canAutoForward)
+    body: z.object({
+      action: RequestAction,
+      body: z.string().min(1).max(8000).optional(),
+      autoForwardReply: z.boolean().optional(),
+    }),
     res: Request,
   },
-  /** Requests where the viewer must act next (receiver of sent/reply_drafted, asker of replied), unread first. */
-  inbox: { method: "GET", path: "/w/:slug/inbox", res: z.array(Request) },
+  /**
+   * v0.6 approval queue — everything waiting for the orchestrator's click, most urgent first:
+   * drafts to forward (draft), replies to forward (reply_drafted), answers to close (replied),
+   * requests addressed to the orchestrator (sent, receiver = null) and pending decision proposals.
+   */
+  queue: {
+    method: "GET",
+    path: "/w/:slug/queue",
+    res: z.object({ requests: z.array(Request), proposals: z.array(DecisionProposal) }),
+  },
   getRequest: { method: "GET", path: "/w/:slug/requests/:id", res: Request }, // same visibility rules
   markRead: { method: "POST", path: "/w/:slug/requests/:id/read", res: Ok },
 
@@ -176,8 +211,23 @@ export const Routes = {
       body: z.string().max(5000),
       rationale: z.string().min(1).max(5000),
       taskId: Id.nullable(),
+      roleIds: z.array(Id).default([]),
     }),
     res: Decision,
+  },
+  listProposals: { method: "GET", path: "/w/:slug/proposals", res: z.array(DecisionProposal) },
+  /** accept → records a Decision (optionally edited); reject → proposal closed, audit kept. */
+  actOnProposal: {
+    method: "POST",
+    path: "/w/:slug/proposals/:id",
+    body: z.object({
+      action: z.enum(["accept", "reject"]),
+      title: z.string().min(1).max(200).optional(),
+      body: z.string().max(5000).optional(),
+      rationale: z.string().min(1).max(5000).optional(),
+      roleIds: z.array(Id).optional(),
+    }),
+    res: z.object({ proposal: DecisionProposal, decision: Decision.nullable() }),
   },
 
   /**
@@ -199,7 +249,7 @@ export const Routes = {
   createAgent: {
     method: "POST",
     path: "/w/:slug/agents",
-    body: z.object({ kind: Agent.shape.kind, label: z.string().max(60), scopes: z.array(AgentScope) }),
+    body: z.object({ roleId: Id, kind: Agent.shape.kind, label: z.string().max(60), scopes: z.array(AgentScope) }),
     res: z.object({ agent: Agent, token: z.string() }), // token shown ONCE
   },
   revokeAgent: { method: "DELETE", path: "/w/:slug/agents/:id", res: Agent },
@@ -225,9 +275,12 @@ export const Routes = {
 export const McpTools = {
   read_board: { scope: "board:read", humanApproval: false },
   list_inbox: { scope: "inbox:read", humanApproval: false },
-  post_status: { scope: "status:write:self", humanApproval: false },
-  send_request: { scope: "request:draft", humanApproval: true }, // creates a DRAFT; owner clicks send
-  reply_draft: { scope: "request:draft", humanApproval: true }, // drafts a reply; owner clicks send
+  post_status: { scope: "status:write:self", humanApproval: false }, // the agent's own ROLE card
+  send_request: { scope: "request:draft", humanApproval: true }, // creates a DRAFT; the orchestrator forwards it
+  reply_draft: { scope: "request:draft", humanApproval: true }, // drafts a reply; the orchestrator forwards it
+  check_paths: { scope: "board:read", humanApproval: false }, // v0.6: who owns these files?
+  read_decisions: { scope: "decision:read", humanApproval: false }, // v0.6
+  propose_decision: { scope: "decision:propose", humanApproval: true }, // v0.6: the orchestrator records it
 } as const satisfies Record<string, { scope: AgentScope; humanApproval: boolean }>;
 export type McpToolName = keyof typeof McpTools;
 
@@ -239,16 +292,27 @@ export const McpToolInputs = {
     presence: PresenceState,
     doing: z.string().max(280).nullable().optional(),
     branch: z.string().max(200).nullable().optional(),
-    waitingOn: z.array(Id).optional(),
+    paths: z.array(z.string().min(1).max(200)).max(50).optional(),
+    /** role keys (e.g. "backend") this role is waiting on */
+    waitingOn: z.array(RoleKey).optional(),
   }),
   send_request: z.object({
-    receiverId: Id,
+    /** a role key ("backend", "leader"...) or "orchestrator" to ask the human */
+    to: z.union([RoleKey, z.literal("orchestrator")]),
+    kind: RequestKind.default("question"),
     title: z.string().min(1).max(200),
     body: z.string().min(1).max(8000),
     taskId: Id.nullable().optional(),
     dueAt: z.string().datetime({ offset: true }).nullable().optional(),
   }),
   reply_draft: z.object({ requestId: Id, body: z.string().min(1).max(8000) }),
+  check_paths: z.object({ paths: z.array(z.string().min(1).max(200)).min(1).max(100) }),
+  read_decisions: z.object({ limit: z.number().int().min(1).max(50).optional() }),
+  propose_decision: z.object({
+    title: z.string().min(1).max(200),
+    body: z.string().max(5000),
+    rationale: z.string().min(1).max(5000),
+  }),
 } as const satisfies Record<McpToolName, z.ZodTypeAny>;
 
 /** Mascot mood is derived from presence — brand renders a pose per mood. */
