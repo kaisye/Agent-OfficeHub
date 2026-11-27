@@ -95,6 +95,8 @@ export function viewFor(r: Row, msgs: Row[], viewer: Viewer, seenAt?: Date): Req
   if (!isParty(ref, viewer)) return null;
   if (viewer.kind === "role" && viewer.roleId !== ref.askerRoleId && !msgs.some((m) => m.sent_by_id)) return null;
   const messages = msgs.filter((m) => canSeeMessage(ref, { kind: m.kind, sentById: m.sent_by_id }, viewer)).map(mapMessage);
+  // A reply draft is private to the receiving side: the asking role still sees "sent" until the orchestrator forwards it.
+  const hideReplyDraft = viewer.kind === "role" && viewer.roleId !== ref.receiverRoleId && r.status === "reply_drafted";
   return {
     id: r.id,
     workspaceId: r.workspace_id,
@@ -103,7 +105,7 @@ export function viewFor(r: Row, msgs: Row[], viewer: Viewer, seenAt?: Date): Req
     autoForwardReply: r.auto_forward_reply,
     taskId: r.task_id,
     title: r.title,
-    status: r.status,
+    status: hideReplyDraft ? "sent" : r.status,
     dueAt: r.due_at ? isoReq(r.due_at) : null,
     messages,
     unreadForViewer: !seenAt || seenAt.getTime() < new Date(r.updated_at).getTime(),

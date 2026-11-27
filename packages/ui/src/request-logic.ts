@@ -13,72 +13,54 @@ export const REQUEST_STATUS_LABEL_VI: Record<RequestStatus, string> = {
   cancelled: "Đã hủy",
 };
 
-/** Label + one-line helper, per viewer side (request-flow.md §6). */
+/**
+ * Label + one-line helper from the orchestrator's point of view (v0.6: the human is the gate for both sides).
+ * `asker` / `receiver` are display names of the two parties ("Frontend", or "bạn" for the orchestrator).
+ */
 export function requestStatusText(
-  request: Pick<Request, "status" | "messages">,
-  side: "asker" | "receiver" | "observer",
-  otherName: string,
+  request: Pick<Request, "status" | "messages" | "receiverRoleId">,
+  names: { asker: string; receiver: string },
 ): { label: string; help: string } {
-  const lastDraftByAgent = [...request.messages].reverse().find((m) => m.sentById === null)?.authoredBy === "agent";
+  const toMe = request.receiverRoleId === null;
   switch (request.status) {
     case "draft":
-      return lastDraftByAgent
-        ? { label: "Nháp từ agent", help: "Agent đã soạn giúp bạn; xem lại rồi bấm Gửi." }
-        : { label: "Bản nháp", help: "Chưa gửi, chỉ mình bạn thấy." };
+      return { label: "Nháp chờ chuyển", help: `${names.asker} đã soạn nháp. Xem, sửa nếu cần, rồi bấm Chuyển tới ${names.receiver}.` };
     case "sent":
-      return side === "receiver"
-        ? { label: "Chờ bạn trả lời", help: `${otherName} đang chờ bạn; soạn hoặc nhờ agent soạn nháp.` }
-        : { label: "Đã gửi", help: `Đang chờ ${otherName} trả lời.` };
+      return toMe
+        ? { label: "Chờ bạn trả lời", help: `${names.asker} đang hỏi bạn.` }
+        : { label: "Đã chuyển", help: `Đang chờ ${names.receiver} soạn trả lời.` };
     case "reply_drafted":
-      return side === "receiver"
-        ? { label: "Nháp trả lời", help: "Đã có nháp, xem lại rồi bấm Gửi trả lời." }
-        : { label: "Đã gửi", help: `Đang chờ ${otherName} trả lời.` };
+      return { label: "Trả lời chờ chuyển", help: `${names.receiver} đã soạn trả lời. Duyệt rồi bấm Chuyển trả lời.` };
     case "replied":
-      return side === "asker"
-        ? { label: "Đã có trả lời", help: "Chấp nhận để đóng, hoặc hỏi lại nếu chưa đủ." }
-        : { label: "Đã trả lời", help: `Đang chờ ${otherName} chấp nhận.` };
+      return { label: "Đã có trả lời", help: "Đóng nếu đủ, hoặc hỏi lại." };
     case "closed":
-      return { label: "Đã xong", help: "Yêu cầu đã được chấp nhận." };
+      return { label: "Đã xong", help: "Yêu cầu đã đóng." };
     case "cancelled":
-      return { label: "Đã hủy", help: "Người hỏi đã hủy; không cần trả lời nữa." };
+      return { label: "Đã hủy", help: "Yêu cầu đã bị hủy; không cần trả lời nữa." };
   }
 }
 
 export const ACTION_LABEL_VI: Record<RequestAction, string> = {
-  send: "Gửi",
+  send: "Chuyển",
   draft_reply: "Soạn trả lời",
-  send_reply: "Gửi trả lời",
-  accept: "Chấp nhận",
+  send_reply: "Chuyển trả lời",
+  accept: "Đóng",
   follow_up: "Hỏi lại",
-  cancel: "Hủy yêu cầu",
+  cancel: "Hủy",
 };
 const ACTION_ORDER: RequestAction[] = ["send", "send_reply", "accept", "follow_up", "draft_reply", "cancel"];
 
 /** Which actions this actor may take now. Delegates entirely to the shared state machine. */
-export function availableActions(request: Pick<Request, "status" | "askerId" | "receiverId">, actor: Actor): RequestAction[] {
+export function availableActions(request: Pick<Request, "status" | "askerRoleId" | "receiverRoleId">, actor: Actor): RequestAction[] {
   return ACTION_ORDER.filter((a) => canTransition(request, a, actor).ok);
 }
 
-/**
- * Direction-aware heading for a request ("Nháp agent của bạn · gửi Dũng", "Dũng hỏi bạn", "Bạn hỏi Dũng").
- * Unsent drafts are visible only to their owner (canSeeMessage), so the draft wording is only used for that side.
- */
+/** "Frontend → Backend", "Bạn → Backend", "Frontend → bạn". `roleName` resolves a role id; null = the orchestrator. */
 export function requestDirectionLabel(
-  request: Pick<Request, "status" | "askerId" | "receiverId" | "messages">,
-  viewerMemberId: string,
-  askerName: string,
-  receiverName: string,
+  request: Pick<Request, "askerRoleId" | "receiverRoleId">,
+  roleName: (roleId: string) => string,
 ): string {
-  const side = viewerMemberId === request.askerId ? "asker" : viewerMemberId === request.receiverId ? "receiver" : "observer";
-  const last = request.messages[request.messages.length - 1];
-  const unsentByAgent = !!last && last.sentById === null && last.authoredBy === "agent";
-  if (side === "asker") {
-    if (request.status === "draft") return `${unsentByAgent ? "Nháp agent của bạn" : "Nháp của bạn"} · gửi ${receiverName}`;
-    return `Bạn hỏi ${receiverName}`;
-  }
-  if (side === "receiver") {
-    if (request.status === "reply_drafted") return `${unsentByAgent ? "Nháp agent của bạn" : "Nháp của bạn"} · trả lời ${askerName}`;
-    return `${askerName} hỏi bạn`;
-  }
-  return `${askerName} hỏi ${receiverName}`;
+  const asker = request.askerRoleId ? roleName(request.askerRoleId) : "Bạn";
+  const receiver = request.receiverRoleId ? roleName(request.receiverRoleId) : "bạn";
+  return `${asker} → ${receiver}`;
 }

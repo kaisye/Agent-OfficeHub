@@ -8,13 +8,14 @@ import { errorMessage } from "@/lib/errors";
 import { useWorkspace } from "./workspace";
 
 const SUGGESTIONS = [
-  "Dũng đang làm trên nhánh nào, có conflict với mình không?",
-  "Ai đang chờ ai, việc nào đang đứng?",
-  "Nhóm đã chốt gì về tag theo app?",
-  "Hôm nay có yêu cầu nào mình cần trả lời?",
+  "Frontend đang sửa file nào, có đụng vùng của vai trò khác không?",
+  "Vai trò nào đang chờ vai trò nào, việc nào đang đứng?",
+  "Đã chốt gì về contract_change?",
+  "Backend đang ở nhánh nào, kẹt gì?",
 ];
 const TOOL_LABEL: Record<string, string> = {
-  get_team_status: "trạng thái nhóm",
+  get_team_status: "thẻ các vai trò",
+  check_paths: "vùng sở hữu",
   list_my_requests: "yêu cầu của bạn",
   list_decisions: "sổ quyết định",
   compare_branches: "so sánh nhánh",
@@ -61,7 +62,7 @@ export function AssistantScreen() {
         <p className="text-[11px] font-semibold uppercase tracking-[.18em] text-oh-ink-muted">Trợ lý văn phòng</p>
         <h1 className="mt-1 text-oh-3xl font-bold">Hỏi trợ lý</h1>
         <p className="mt-1 text-oh-sm text-oh-ink-muted">
-          Hỏi về nhánh, việc, yêu cầu và quyết định của nhóm. Trợ lý chỉ đọc, chỉ thấy những gì bạn được xem, và không làm thay bạn.
+          Hỏi về nhánh, file đang sửa, yêu cầu và quyết định của các vai trò. Trợ lý chỉ đọc và không làm thay bạn.
         </p>
       </header>
 
@@ -114,7 +115,7 @@ export function AssistantScreen() {
         {busy && (
           <div role="status" className="flex items-center gap-2.5 text-oh-xs text-oh-ink-muted">
             <Mascot mascot={{ buddy: "milo" }} mood="curious" size={32} decorative noBadge />
-            Trợ lý đang xem dữ liệu nhóm…
+            Trợ lý đang xem dữ liệu văn phòng…
           </div>
         )}
         <div ref={end} />

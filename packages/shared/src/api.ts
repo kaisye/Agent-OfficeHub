@@ -157,6 +157,8 @@ export const Routes = {
       doing: z.string().max(280).nullable(),
       branch: z.string().max(200).nullable(),
       waitingOn: z.array(Id),
+      /** omitted = keep the agent's last list; [] = clear it (e.g. a dead session left stale files) */
+      paths: z.array(z.string().min(1).max(200)).max(50).optional(),
     }),
   },
 

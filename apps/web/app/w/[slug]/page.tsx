@@ -1,14 +1,8 @@
-import { Suspense } from "react";
 import type { Metadata } from "next";
-import { BoardScreen } from "@/components/board-screen";
-import { PageSkeleton } from "@/components/skeletons";
+import { QueueScreen } from "@/components/queue-screen";
 
-export const metadata: Metadata = { title: "Văn phòng" };
+export const metadata: Metadata = { title: "Chờ duyệt" };
 
-export default function BoardPage() {
-  return (
-    <Suspense fallback={<PageSkeleton label="Đang tải văn phòng…" />}>
-      <BoardScreen />
-    </Suspense>
-  );
+export default function QueuePage() {
+  return <QueueScreen />;
 }

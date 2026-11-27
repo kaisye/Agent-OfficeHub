@@ -3,25 +3,32 @@ import type {
   Agent,
   Board,
   Decision,
+  DecisionProposal,
   ChangeKind,
   Id,
   Me,
   Request,
   RequestAction,
+  Role,
   Routes,
 } from "@officehub/shared";
 import type { ApiErrorCode } from "@officehub/shared";
 
+/** Request body as the client sends it (zod input: fields with a default are optional). */
 export type Body<K extends keyof typeof Routes> = (typeof Routes)[K] extends { body: infer B extends z.ZodTypeAny }
-  ? z.infer<B>
+  ? z.input<B>
   : never;
 
-export type UpdateStatusInput = Body<"updateMyStatus">;
 export type MascotInput = Body<"updateMyMascot">;
 export type CreateRequestInput = Body<"createRequest">;
 export type RecordDecisionInput = Body<"recordDecision">;
 export type CreateAgentInput = Body<"createAgent">;
-export type ActInput = { action: RequestAction; body?: string };
+export type UpdateRoleInput = Body<"updateRole">;
+export type RoleStatusInput = Body<"updateRoleStatus">;
+export type ProposalActionInput = Body<"actOnProposal">;
+export type ActInput = { action: RequestAction; body?: string; autoForwardReply?: boolean };
+export type Queue = z.infer<(typeof Routes)["queue"]["res"]>;
+export type ProposalResult = z.infer<(typeof Routes)["actOnProposal"]["res"]>;
 
 export type { ChangeKind, Me };
 /** A server "change" message. `all` is the client-side fallback for an unparseable message: refresh everything. */
@@ -32,44 +39,48 @@ export interface ChangeEvent {
 
 export type DevMember = z.infer<(typeof Routes)["devMembers"]["res"]>[number];
 export type InviteInfo = z.infer<(typeof Routes)["inviteInfo"]["res"]>;
-export type InviteLink = z.infer<(typeof Routes)["inviteMember"]["res"]>;
 export type AcceptInviteInput = Body<"acceptInvite">;
 export type ChangePasswordInput = Body<"changePassword">;
 export type AssistantTurn = { role: "user" | "assistant"; text: string };
 export type AssistantAnswer = z.infer<(typeof Routes)["askAssistant"]["res"]>;
 
-/** One interface, two implementations (http | mock). All calls are scoped by workspace slug. */
+/**
+ * One interface, two implementations (http | mock). All calls are scoped by workspace slug.
+ * v0.6: the signed-in human is the orchestrator; every human-only action is theirs.
+ */
 export interface ApiClient {
   readonly mode: "http" | "mock";
   // session
   me(): Promise<Me>;
-  /** Dev login picker (http: GET /auth/dev-members?workspace=<slug>, 404 when dev login is disabled; mock: the seed members). */
+  /** Dev login picker (http: GET /auth/dev-members?workspace=<slug>, 404 when dev login is disabled; mock: the orchestrator). */
   devMembers(workspace: string): Promise<DevMember[]>;
   devLogin(memberId: Id): Promise<void>;
   /** Where the "Đăng nhập bằng GitHub" button sends the browser. */
   githubLoginUrl(): string;
   logout(): Promise<void>;
-  // password login via one-time invite links
+  // password login; invite links now only (re)set the orchestrator's password (pnpm db:invite)
   passwordLogin(email: string, password: string): Promise<void>;
   inviteInfo(token: string): Promise<InviteInfo>;
   acceptInvite(input: AcceptInviteInput): Promise<void>;
-  /** Admin only. */
-  inviteMember(slug: string, memberId: Id): Promise<InviteLink>;
   changePassword(slug: string, input: ChangePasswordInput): Promise<void>;
-  // board
+  // board + roles
   board(slug: string): Promise<Board>;
-  updateMyStatus(slug: string, input: UpdateStatusInput): Promise<void>;
   updateMyMascot(slug: string, input: MascotInput): Promise<void>;
+  listRoles(slug: string): Promise<Role[]>;
+  updateRole(slug: string, id: Id, input: UpdateRoleInput): Promise<Role>;
+  updateRoleStatus(slug: string, id: Id, input: RoleStatusInput): Promise<void>;
   // requests
+  queue(slug: string): Promise<Queue>;
   listRequests(slug: string): Promise<Request[]>;
   createRequest(slug: string, input: CreateRequestInput): Promise<Request>;
   actOnRequest(slug: string, id: Id, input: ActInput): Promise<Request>;
   getRequest(slug: string, id: Id): Promise<Request>;
-  inbox(slug: string): Promise<Request[]>;
   markRead(slug: string, id: Id): Promise<void>;
-  // decisions
+  // decisions + proposals
   listDecisions(slug: string): Promise<Decision[]>;
   recordDecision(slug: string, input: RecordDecisionInput): Promise<Decision>;
+  listProposals(slug: string): Promise<DecisionProposal[]>;
+  actOnProposal(slug: string, id: Id, input: ProposalActionInput): Promise<ProposalResult>;
   // agents
   listMyAgents(slug: string): Promise<Agent[]>;
   createAgent(slug: string, input: CreateAgentInput): Promise<{ agent: Agent; token: string }>;

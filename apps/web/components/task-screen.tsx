@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { Badge, Button, Card, DecisionCard, EmptyState, EventRow, Icon, Mascot, TaskChip, relativeTimeVi, requestStatusText } from "@officehub/ui";
+import { KindChip } from "./parties";
 import { eventDetail } from "@/lib/events";
-import { useBoard, useDecisions, useHandoff, useRequests } from "@/lib/hooks";
-import { memberMap } from "@/lib/requests";
+import { useAgents, useBoard, useDecisions, useHandoff, useRequests } from "@/lib/hooks";
+import { agentRoleName, directionLabel, partyOf, roleMap } from "@/lib/requests";
 import { Markdown } from "./markdown";
 import { NewRequestDialog } from "./new-request-dialog";
 import { ListSkeleton } from "./skeletons";
@@ -21,6 +22,7 @@ export function TaskScreen({ id: idProp, embedded }: { id?: string; embedded?: b
   const requests = useRequests(slug);
   const decisions = useDecisions(slug);
   const handoff = useHandoff(slug, id);
+  const agents = useAgents(slug);
   const [creating, setCreating] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -34,15 +36,16 @@ export function TaskScreen({ id: idProp, embedded }: { id?: string; embedded?: b
         mascot={me.mascot}
         description="Việc có thể thuộc văn phòng khác hoặc đã bị gỡ."
         action={
-          <Link href={`/w/${slug}`} className="rounded-oh-md bg-oh-primary px-4 py-2 text-oh-primary-fg">
+          <Link href={`/w/${slug}/office`} className="rounded-oh-md bg-oh-primary px-4 py-2 text-oh-primary-fg">
             Về văn phòng
           </Link>
         }
       />
     );
   }
-  const map = memberMap(board.data.members);
-  const owner = task.assigneeId ? map.get(task.assigneeId) : null;
+  const roles = roleMap(board.data.roles);
+  const orchestrator = board.data.orchestrator;
+  const owner = task.roleId ? roles.get(task.roleId) : null;
   const events = board.data.recentEvents.filter((e) => e.taskId === id);
   const related = requests.data.filter((r) => r.taskId === id);
   const decs = decisions.data.filter((d) => d.taskId === id);
@@ -60,7 +63,7 @@ export function TaskScreen({ id: idProp, embedded }: { id?: string; embedded?: b
   return (
     <div className="space-y-6">
       <div className="space-y-3">
-        {!embedded && <Link href={`/w/${slug}`} className="inline-flex items-center gap-1 text-oh-sm text-oh-ink-muted hover:text-oh-ink focus-visible:outline-3 focus-visible:outline-oh-focus">
+        {!embedded && <Link href={`/w/${slug}/office`} className="inline-flex items-center gap-1 text-oh-sm text-oh-ink-muted hover:text-oh-ink focus-visible:outline-3 focus-visible:outline-oh-focus">
           <Icon name="reply" size={14} />
           Văn phòng
         </Link>}
@@ -69,11 +72,11 @@ export function TaskScreen({ id: idProp, embedded }: { id?: string; embedded?: b
           <TaskChip task={task} />
           <span className="inline-flex items-center gap-1.5 text-oh-sm text-oh-ink-muted">
             {owner && <Mascot mascot={owner.mascot} mood="relaxed" size={24} decorative noBadge />}
-            {owner ? `${owner.displayName} phụ trách` : "Chưa giao ai"}
+            {owner ? `${owner.name} phụ trách` : "Chưa giao vai trò nào"}
           </span>
           {task.syncedAt && <span className="text-oh-xs text-oh-ink-muted">Đồng bộ {relativeTimeVi(task.syncedAt)}</span>}
           <Button size="sm" variant="secondary" icon="request" onClick={() => setCreating(true)}>
-            Hỏi về việc này
+            Giao việc về việc này
           </Button>
         </div>
       </div>
@@ -111,16 +114,16 @@ export function TaskScreen({ id: idProp, embedded }: { id?: string; embedded?: b
             ) : (
               <ul className="space-y-2">
                 {related.map((r) => {
-                  const side = r.askerId === me.id ? "asker" : r.receiverId === me.id ? "receiver" : "observer";
-                  const other = map.get(side === "receiver" ? r.askerId : r.receiverId);
-                  const { label } = requestStatusText(r, side, other?.displayName ?? "");
+                  const a = partyOf(r.askerRoleId, roles, orchestrator);
+                  const b = partyOf(r.receiverRoleId, roles, orchestrator);
+                  const { label } = requestStatusText(r, { asker: a.displayName, receiver: b.human ? "bạn" : b.displayName });
                   return (
                     <li key={r.id}>
                       <Link href={`/w/${slug}/requests/${r.id}`} className="flex items-center gap-2 rounded-oh-lg border border-oh-border bg-oh-surface p-2.5 hover:shadow-oh-md focus-visible:outline-3 focus-visible:outline-oh-focus">
-                        {other && <Mascot mascot={other.mascot} mood="relaxed" size={32} decorative noBadge />}
+                        <Mascot mascot={a.mascot} mood="relaxed" size={32} decorative noBadge />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-oh-sm font-medium">{r.title}</span>
-                          <span className="text-oh-xs text-oh-ink-muted">{label}</span>
+                          <span className="flex flex-wrap items-center gap-1 text-oh-xs text-oh-ink-muted">{directionLabel(r, roles)} · {label} <KindChip kind={r.kind} /></span>
                         </span>
                       </Link>
                     </li>
@@ -138,14 +141,11 @@ export function TaskScreen({ id: idProp, embedded }: { id?: string; embedded?: b
               <p className="text-oh-sm text-oh-ink-muted">Chưa có quyết định nào.</p>
             ) : (
               <ul className="space-y-3">
-                {decs.map((d) => {
-                  const by = map.get(d.decidedById);
-                  return by ? (
-                    <li key={d.id}>
-                      <DecisionCard decision={d} decidedBy={by} />
-                    </li>
-                  ) : null;
-                })}
+                {decs.map((d) => (
+                  <li key={d.id}>
+                    <DecisionCard decision={d} decidedBy={{ displayName: "Bạn", mascot: orchestrator.mascot }} />
+                  </li>
+                ))}
               </ul>
             )}
           </section>
@@ -159,7 +159,7 @@ export function TaskScreen({ id: idProp, embedded }: { id?: string; embedded?: b
             ) : (
               <ul className="divide-y divide-oh-border">
                 {events.map((e) => (
-                  <EventRow key={e.id} event={e} actorName={e.actorMemberId ? map.get(e.actorMemberId)?.displayName : undefined} detail={eventDetail(e, board.data!)} />
+                  <EventRow key={e.id} event={e} actorName={e.actorAgentId ? (agentRoleName(e.actorAgentId, agents.data, roles) ?? "agent") : e.actorMemberId ? "Bạn" : undefined} detail={eventDetail(e, board.data!)} />
                 ))}
               </ul>
             )}
@@ -167,7 +167,7 @@ export function TaskScreen({ id: idProp, embedded }: { id?: string; embedded?: b
         </aside>
       </div>
 
-      <NewRequestDialog open={creating} onClose={() => setCreating(false)} slug={slug} members={board.data.members} tasks={board.data.tasks} meId={me.id} defaultTaskId={task.id} defaultReceiverId={owner && owner.id !== me.id ? owner.id : null} />
+      <NewRequestDialog open={creating} onClose={() => setCreating(false)} slug={slug} roles={board.data.roles} tasks={board.data.tasks} defaultTaskId={task.id} defaultRoleId={owner?.id ?? null} />
     </div>
   );
 }

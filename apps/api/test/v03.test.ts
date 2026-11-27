@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { AgentRateLimiter, adminSql, closeAll, withWorkspace } from "@officehub/db";
-import { makeAgentToken, makeWorkspace } from "@officehub/db/testing";
+import { AgentRateLimiter, adminSql, closeAll, createRequestDraft, withWorkspace } from "@officehub/db";
+import { makeAgent, makeAgentToken, makeWorkspace } from "@officehub/db/testing";
 import { Agent, ChangeKind, Me, Request as RequestSchema, Routes } from "@officehub/shared";
 import { createApp } from "../src/app.js";
 import { createMcpApp } from "../../mcp/src/app.js";
@@ -26,16 +26,16 @@ const call = (h: H, cookie: string, method: string, path: string, body?: unknown
     headers: { cookie, "content-type": "application/json", "x-officehub-csrf": "1", origin: ORIGIN },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-const mkReq = (rcv: string, title: string, body: string) => ({ receiverId: rcv, title, body, taskId: null, dueAt: null });
+const mkReq = (receiverRoleId: string, title: string, body: string, kind = "question") => ({ receiverRoleId, kind, title, body, taskId: null, dueAt: null });
 
-describe("v0.3 routes", () => {
+describe("v0.3 routes (v0.6 model)", () => {
   it("/me and dev-login return the Me shape", async () => {
     const h = setup();
     const w = await makeWorkspace("v3");
-    const c = await login(h, w.alice);
+    const c = await login(h, w.orchestrator);
     const me = await (await call(h, c, "GET", "/me")).json();
     expect(Routes.me.res.safeParse(me).success).toBe(true);
-    expect(me).toMatchObject({ workspaceSlug: w.slug, id: w.alice });
+    expect(me).toMatchObject({ workspaceSlug: w.slug, id: w.orchestrator });
   });
 
   it("GET /auth/dev-members: list when DEV_LOGIN_ENABLED, 404 otherwise; no secrets in it", async () => {
@@ -44,58 +44,70 @@ describe("v0.3 routes", () => {
     expect(on.status).toBe(200);
     const list = await on.json();
     expect(Routes.devMembers.res.safeParse(list).success).toBe(true);
-    expect(list.find((m: { id: string }) => m.id === w.bob)).toMatchObject({ displayName: "Bob", workspaceSlug: w.slug });
+    expect(list.find((m: { id: string }) => m.id === w.orchestrator)).toMatchObject({ displayName: "Orchestrator", workspaceSlug: w.slug });
     expect(Object.keys(list[0]).sort()).toEqual(["displayName", "id", "mascot", "workspaceSlug"]);
     const off = await setup({ devLoginEnabled: false }).app.request("/auth/dev-members");
     expect(off.status).toBe(404);
   });
 
-  it("getRequest: parties see it; draft hidden from the receiver (404); non-party 404; admin sees sent only; unauthenticated 401; Request schema", async () => {
+  it("getRequest: the orchestrator sees everything (drafts and reply drafts too) with role authorship; other workspace 404; agent token 403; unauthenticated 401; Request schema", async () => {
     const h = setup();
     const w = await makeWorkspace("v3");
-    const [a, b, c] = [await login(h, w.alice), await login(h, w.bob), await login(h, w.carol)];
-    const req = await (await call(h, a, "POST", `/w/${w.slug}/requests`, mkReq(w.bob, "GR-TITLE", "GR-BODY"))).json();
-    expect((await call(h, a, "GET", `/w/${w.slug}/requests/${req.id}`)).status).toBe(200);
-    for (const who of [b, c]) expect((await call(h, who, "GET", `/w/${w.slug}/requests/${req.id}`)).status).toBe(404);
-    await call(h, a, "POST", `/w/${w.slug}/requests/${req.id}/actions`, { action: "send" });
-    await call(h, b, "POST", `/w/${w.slug}/requests/${req.id}/actions`, { action: "draft_reply", body: "REPLY-DRAFT-SECRET" });
-    const asBob = await call(h, b, "GET", `/w/${w.slug}/requests/${req.id}`);
-    const bobJson = await asBob.json();
-    expect(RequestSchema.safeParse(bobJson).success).toBe(true);
-    expect(bobJson.messages.every((m: { authorMemberId?: string }) => typeof m.authorMemberId === "string")).toBe(true);
-    const asAlice = await (await call(h, a, "GET", `/w/${w.slug}/requests/${req.id}`)).json();
-    expect(JSON.stringify(asAlice)).not.toContain("REPLY-DRAFT-SECRET"); // receiver's reply draft is redacted for the asker
-    expect(asAlice.messages).toHaveLength(1);
-    expect((await call(h, c, "GET", `/w/${w.slug}/requests/${req.id}`)).status).toBe(404);
-    await adminSql()`UPDATE members SET role = 'admin' WHERE id = ${w.carol}`;
-    const adm = await call(h, c, "GET", `/w/${w.slug}/requests/${req.id}`);
-    expect(adm.status).toBe(200);
-    expect(JSON.stringify(await adm.json())).not.toContain("REPLY-DRAFT-SECRET");
-    expect((await h.app.request(`/w/${w.slug}/requests/${req.id}`)).status).toBe(401);
+    const other = await makeWorkspace("v3");
+    const [a, o] = [await login(h, w.orchestrator), await login(h, other.orchestrator)];
+    const fe = await makeAgent(w, "frontend");
+    const be = await makeAgent(w, "backend");
+    const draft = await createRequestDraft(fe.principal, mkReq(w.roles.backend, "GR-TITLE", "GR-BODY"));
+    // an unsent draft is visible to the orchestrator (it is theirs to review)
+    const asOrch = await call(h, a, "GET", `/w/${w.slug}/requests/${draft.id}`);
+    expect(asOrch.status).toBe(200);
+    const j = await asOrch.json();
+    expect(RequestSchema.safeParse(j).success).toBe(true);
+    expect(j).toMatchObject({ status: "draft", askerRoleId: w.roles.frontend });
+    expect(j.messages[0]).toMatchObject({ authoredBy: "agent", authorRoleId: w.roles.frontend, authorAgentId: fe.agent.id, sentById: null });
+    await call(h, a, "POST", `/w/${w.slug}/requests/${draft.id}/actions`, { action: "send" });
+    await call(h, a, "POST", `/w/${w.slug}/requests/${draft.id}/actions`, { action: "draft_reply", body: "REPLY-DRAFT" }); // orchestrator may act for the receiver too
+    const full = await (await call(h, a, "GET", `/w/${w.slug}/requests/${draft.id}`)).json();
+    expect(full.messages.map((m: { kind: string }) => m.kind)).toEqual(["ask", "reply"]);
+    expect(full.messages.every((m: { authorRoleId: string | null; authorMemberId?: string | null }) => m.authorRoleId !== undefined)).toBe(true);
+    // the same agent-written request, listed
+    const list = await (await call(h, a, "GET", `/w/${w.slug}/requests`)).json();
+    expect(list.map((r: { id: string }) => r.id)).toContain(draft.id);
+    // role-level redaction is enforced for agents (their view never includes the other role's unsent draft)
+    await createRequestDraft(be.principal, mkReq(w.roles.qa, "BE-PRIVATE-DRAFT", "x"));
+    const inbox = await (await h.app.request("/agent/inbox", { headers: { authorization: `Bearer ${fe.token}` } })).json();
+    expect(JSON.stringify(inbox)).not.toContain("BE-PRIVATE-DRAFT");
+    expect(JSON.stringify(inbox)).not.toContain("REPLY-DRAFT"); // receiver's unsent reply is hidden from the asking role
+    // other workspace / no session / agent token / malformed id
+    expect((await call(h, o, "GET", `/w/${w.slug}/requests/${draft.id}`)).status).toBe(404);
+    expect((await call(h, o, "GET", `/w/${other.slug}/requests/${draft.id}`)).status).toBe(404);
+    expect((await h.app.request(`/w/${w.slug}/requests/${draft.id}`)).status).toBe(401);
+    const viaAgent = await h.app.request(`/w/${w.slug}/requests/${draft.id}`, { headers: { authorization: `Bearer ${fe.token}` } });
+    expect(viaAgent.status).toBe(403);
+    expect((await viaAgent.json()).error.code).toBe("human_only");
     expect((await call(h, a, "GET", `/w/${w.slug}/requests/not-a-uuid`)).status).toBe(404);
   });
 
-  it("markRead returns {ok:true}; revokeAgent returns the revoked Agent", async () => {
+  it("markRead returns {ok:true}; revokeAgent returns the revoked Agent (with its role)", async () => {
     const h = setup();
     const w = await makeWorkspace("v3");
-    const [a, b] = [await login(h, w.alice), await login(h, w.bob)];
-    const req = await (await call(h, a, "POST", `/w/${w.slug}/requests`, mkReq(w.bob, "t", "b"))).json();
-    await call(h, a, "POST", `/w/${w.slug}/requests/${req.id}/actions`, { action: "send" });
-    const mr = await call(h, b, "POST", `/w/${w.slug}/requests/${req.id}/read`);
+    const a = await login(h, w.orchestrator);
+    const req = await (await call(h, a, "POST", `/w/${w.slug}/requests`, mkReq(w.roles.backend, "t", "b"))).json();
+    const mr = await call(h, a, "POST", `/w/${w.slug}/requests/${req.id}/read`);
     expect(await mr.json()).toEqual({ ok: true });
-    const created = await (await call(h, b, "POST", `/w/${w.slug}/agents`, { kind: "codex", label: "x", scopes: ["board:read"] })).json();
-    const rv = await call(h, b, "DELETE", `/w/${w.slug}/agents/${created.agent.id}`);
+    const created = await (await call(h, a, "POST", `/w/${w.slug}/agents`, { roleId: w.roles.design, kind: "codex", label: "x", scopes: ["board:read"] })).json();
+    const rv = await call(h, a, "DELETE", `/w/${w.slug}/agents/${created.agent.id}`);
     const body = await rv.json();
     expect(Agent.safeParse(body).success).toBe(true);
-    expect(body.id).toBe(created.agent.id);
+    expect(body).toMatchObject({ id: created.agent.id, roleId: w.roles.design });
     expect(body.revokedAt).not.toBeNull();
   });
 
   it("audit entries parse as AuditEntry with string targetId", async () => {
     const h = setup();
     const w = await makeWorkspace("v3");
-    const a = await login(h, w.alice);
-    const req = await (await call(h, a, "POST", `/w/${w.slug}/requests`, mkReq(w.bob, "t", "b"))).json();
+    const a = await login(h, w.orchestrator);
+    const req = await (await call(h, a, "POST", `/w/${w.slug}/requests`, mkReq(w.roles.backend, "t", "b"))).json();
     const rows = await (await call(h, a, "GET", `/w/${w.slug}/audit`)).json();
     expect(Routes.audit.res.safeParse(rows).success).toBe(true);
     expect(rows.find((r: { action: string }) => r.action === "request.create").targetId).toBe(req.id);
@@ -104,9 +116,9 @@ describe("v0.3 routes", () => {
   it("secret_detected message format stays '... (rule: <id>) ...' (the web toast parses it)", async () => {
     const h = setup();
     const w = await makeWorkspace("v3");
-    const a = await login(h, w.alice);
+    const a = await login(h, w.orchestrator);
     const key = "ghp_" + "a1B2c3D4e5".repeat(4);
-    const r = await call(h, a, "POST", `/w/${w.slug}/requests`, mkReq(w.bob, "t", key));
+    const r = await call(h, a, "POST", `/w/${w.slug}/requests`, mkReq(w.roles.backend, "t", key));
     const j = await r.json();
     expect(j.error.code).toBe("secret_detected");
     expect(j.error.message).toMatch(/\(rule: ([\w.-]+)\)/);
@@ -142,28 +154,40 @@ describe("SSE", () => {
   const changes = (t: string) =>
     [...t.matchAll(/event: change\ndata: (.*)\n/g)].map((m) => JSON.parse(m[1]!) as { kind: string; id: string });
 
-  it("change payload kinds are ChangeKind; non-parties never get notifications about someone's draft or request events", async () => {
+  it("a workspace's stream never carries another workspace's requests, drafts, cards or proposals; kinds are ChangeKind; payloads hold ids only", async () => {
     const h = setup();
     await h.hub.start();
-    const w = await makeWorkspace("sse");
-    const [a, b, c] = [await login(h, w.alice), await login(h, w.bob), await login(h, w.carol)];
-    const sb = await collect(h, b, w.slug);
-    const sc = await collect(h, c, w.slug);
+    const w1 = await makeWorkspace("sse");
+    const w2 = await makeWorkspace("sse");
+    const [a, b] = [await login(h, w1.orchestrator), await login(h, w2.orchestrator)];
+    const s1 = await collect(h, a, w1.slug);
+    const s2 = await collect(h, b, w2.slug);
     await new Promise((r) => setTimeout(r, 300));
-    const req = await (await call(h, a, "POST", `/w/${w.slug}/requests`, mkReq(w.bob, "SSE-T", "SSE-B"))).json(); // draft: bob must not hear
-    await new Promise((r) => setTimeout(r, 700));
-    expect(changes(sb.text()).filter((m) => m.kind === "request" || m.kind === "event")).toEqual([]);
-    await call(h, a, "POST", `/w/${w.slug}/requests/${req.id}/actions`, { action: "send" });
-    await call(h, a, "PUT", `/w/${w.slug}/status`, { presence: "working", doing: "x", branch: null, waitingOn: [] });
+    // activity in workspace 2 only: an agent draft, a card, a proposal, a decision
+    const fe2 = await makeAgent(w2, "frontend");
+    const d2 = await createRequestDraft(fe2.principal, mkReq(w2.roles.backend, "SSE-T", "SSE-B"));
+    const { proposeDecision, updateRoleStatus } = await import("@officehub/db");
+    const p2 = await proposeDecision(fe2.principal, { title: "SSE-PROPOSAL", body: "", rationale: "r" });
+    await updateRoleStatus(fe2.principal, { presence: "working", doing: "SSE-DOING", branch: null, waitingOn: [] });
+    await new Promise((r) => setTimeout(r, 800));
+    expect(changes(s1.text())).toEqual([]); // nothing at all leaked into workspace 1
+    // activity in workspace 1
+    const fe1 = await makeAgent(w1, "frontend");
+    const d1 = await createRequestDraft(fe1.principal, mkReq(w1.roles.backend, "OWN-T", "OWN-B"));
+    await call(h, a, "POST", `/w/${w1.slug}/requests/${d1.id}/actions`, { action: "send" });
+    await call(h, a, "PUT", `/w/${w1.slug}/roles/${w1.roles.qa}/status`, { presence: "working", doing: "x", branch: null, waitingOn: [] });
     await new Promise((r) => setTimeout(r, 900));
-    await Promise.all([sb.stop(), sc.stop()]);
-    const bm = changes(sb.text());
-    const cm = changes(sc.text());
-    expect(bm.some((m) => m.kind === "request" && m.id === req.id)).toBe(true);
-    expect(cm.some((m) => m.kind === "request")).toBe(false);
-    expect(cm.some((m) => m.kind === "card")).toBe(true); // public changes still reach everyone
-    for (const m of [...bm, ...cm]) expect(ChangeKind.safeParse(m.kind).success).toBe(true);
-    expect(sb.text() + sc.text()).not.toMatch(/SSE-T|SSE-B/);
+    await Promise.all([s1.stop(), s2.stop()]);
+    const m1 = changes(s1.text());
+    const m2 = changes(s2.text());
+    expect(m1.some((m) => m.kind === "request" && m.id === d1.id)).toBe(true);
+    expect(m1.some((m) => m.kind === "card" && m.id === w1.roles.qa)).toBe(true);
+    expect(m1.some((m) => m.id === d2.id || m.id === p2.id)).toBe(false);
+    expect(m2.some((m) => m.kind === "request" && m.id === d2.id)).toBe(true);
+    expect(m2.some((m) => m.kind === "proposal" && m.id === p2.id)).toBe(true);
+    expect(m2.some((m) => m.id === d1.id)).toBe(false);
+    for (const m of [...m1, ...m2]) expect(ChangeKind.safeParse(m.kind).success).toBe(true);
+    expect(s1.text() + s2.text()).not.toMatch(/SSE-T|SSE-B|SSE-PROPOSAL|SSE-DOING|OWN-T|OWN-B/); // ids only, never content
     await h.hub.stop();
   });
 });
@@ -174,7 +198,7 @@ describe("shared rate limit between API and MCP", () => {
     const api = setup({ limiter: limiter() });
     const mcp = createMcpApp({ limiter: limiter() });
     const w = await makeWorkspace("shared");
-    const t = await makeAgentToken(w, "alice");
+    const t = await makeAgentToken(w, "frontend");
     const viaApi = () => api.app.request("/agent/inbox", { headers: { authorization: `Bearer ${t.token}` } });
     const viaMcp = () =>
       mcp.request("/mcp", {
@@ -188,5 +212,15 @@ describe("shared rate limit between API and MCP", () => {
     expect((await viaMcp()).status).toBe(429);
     const row = await withWorkspace(w.id, async () => (await adminSql()`SELECT key FROM rate_buckets WHERE key = ${t.agent.id + ":any"}`).length);
     expect(row).toBe(1);
+  });
+
+  it("a second agent of the same role has its own budget (limits are per token)", async () => {
+    const api = setup({ limiter: new AgentRateLimiter({ perMinute: 2 }) });
+    const w = await makeWorkspace("shared");
+    const t1 = await makeAgentToken(w, "qa");
+    const t2 = await makeAgentToken(w, "qa");
+    const get = (tok: string) => api.app.request("/agent/inbox", { headers: { authorization: `Bearer ${tok}` } });
+    expect([(await get(t1.token)).status, (await get(t1.token)).status, (await get(t1.token)).status]).toEqual([200, 200, 429]);
+    expect((await get(t2.token)).status).toBe(200);
   });
 });

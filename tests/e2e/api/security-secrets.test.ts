@@ -1,65 +1,82 @@
 /** Rule 4: the secret scanner on EVERY text field, human + agent paths; plus bypass attempts. */
 import { beforeAll, describe, expect, it } from "vitest";
-import { FAKE, MEMBER, W, act, api, createAgent, draftRequest, login, sentRequest, sql, tool, toolErrCode, uniq, type AgentCred, type Session } from "../src/helpers.js";
+import { FAKE, ROLE_KEYS, W, act, agentDraft, api, assign, createAgent, createWorld, roleStatus, sql, tool, toolErrCode, uniq, type AgentCred, type World } from "../src/helpers.js";
 import { known } from "../src/known.js";
 
-let bao: Session, trang: Session, phong: Session;
-let baoAgent: AgentCred, trangAgent: AgentCred;
+let w: World;
+let feAgent: AgentCred, beAgent: AgentCred;
+let propCount = 0;
 const clean = (s: string) => `QA-E2E-SEC ${s}`;
 
 beforeAll(async () => {
-  [bao, trang, phong] = await Promise.all([login(MEMBER.bao), login(MEMBER.trang), login(MEMBER.phong)]);
-  [baoAgent, trangAgent] = await Promise.all([createAgent(bao), createAgent(trang)]);
+  w = await createWorld("secrets");
+  [feAgent, beAgent] = await Promise.all([createAgent(w, "frontend"), createAgent(w, "backend")]);
 });
 
 type Writer = (secretText: string) => Promise<{ blocked: boolean; stored: boolean; status: number }>;
 const verdict = (status: number) => ({ status, blocked: status === 422, stored: status === 200 || status === 201 });
+const mcpVerdict = (r: Awaited<ReturnType<typeof tool>>) => verdict(toolErrCode(r) === "secret_detected" ? 422 : r.isError ? 400 : 200);
+const postRequest = (title: string, body: string) => api(w.orch, "POST", W(w, "/requests"), { receiverRoleId: w.roles.backend, kind: "question", title, body, taskId: null, dueAt: null });
+/** a draft by the frontend agent, waiting for the orchestrator (fresh each time: the agent may hold 10 open drafts at most) */
+const freshDraft = async () => {
+  const d = await agentDraft(feAgent, "backend", { title: uniq("QA-E2E-SEC-d") });
+  return d.id;
+};
 
 /** Every human + agent write path that accepts free text. */
 const writers: Record<string, Writer> = {
-  "request.title": async (t) => verdict((await api(bao, "POST", W("/requests"), { receiverId: MEMBER.trang, title: clean(t), body: "ok", taskId: null, dueAt: null })).status),
-  "request.body": async (t) => verdict((await api(bao, "POST", W("/requests"), { receiverId: MEMBER.trang, title: "QA-E2E-SEC body", body: clean(t), taskId: null, dueAt: null })).status),
-  "status.doing": async (t) => verdict((await api(bao, "PUT", W("/status"), { presence: "idle", doing: clean(t), branch: null, waitingOn: [] })).status),
-  "status.branch": async (t) => verdict((await api(bao, "PUT", W("/status"), { presence: "idle", doing: null, branch: clean(t), waitingOn: [] })).status),
-  "decision.title": async (t) => verdict((await api(bao, "POST", W("/decisions"), { title: clean(t), body: "", rationale: "r", taskId: null })).status),
-  "decision.body": async (t) => verdict((await api(bao, "POST", W("/decisions"), { title: "QA-E2E-SEC dec", body: clean(t), rationale: "r", taskId: null })).status),
-  "decision.rationale": async (t) => verdict((await api(bao, "POST", W("/decisions"), { title: "QA-E2E-SEC dec", body: "", rationale: clean(t), taskId: null })).status),
-  "agent.label": async (t) => verdict((await api(bao, "POST", W("/agents"), { kind: "codex", label: `qa-e2e ${t}`.slice(0, 60), scopes: ["board:read"] })).status),
-  "mcp.send_request.body": async (t) => {
-    const r = await tool(baoAgent.token, "send_request", { receiverId: MEMBER.trang, title: "QA-E2E-SEC mcp", body: clean(t) });
-    return verdict(toolErrCode(r) === "secret_detected" ? 422 : r.isError ? 400 : 200);
-  },
+  "request.title": async (t) => verdict((await postRequest(clean(t), "ok")).status),
+  "request.body": async (t) => verdict((await postRequest("QA-E2E-SEC body", clean(t))).status),
+  "role.status.doing": async (t) => verdict((await roleStatus(w, "qa", { doing: clean(t) })).status),
+  "role.status.branch": async (t) => verdict((await roleStatus(w, "qa", { branch: clean(t) })).status),
+  "role.mission": async (t) => verdict((await api(w.orch, "PUT", W(w, `/roles/${w.roles.qa}`), { mission: clean(t) })).status),
+  "role.name": async (t) => verdict((await api(w.orch, "PUT", W(w, `/roles/${w.roles.qa}`), { name: clean(t).slice(0, 60) })).status),
+  "decision.title": async (t) => verdict((await api(w.orch, "POST", W(w, "/decisions"), { title: clean(t), body: "", rationale: "r", taskId: null })).status),
+  "decision.body": async (t) => verdict((await api(w.orch, "POST", W(w, "/decisions"), { title: "QA-E2E-SEC dec", body: clean(t), rationale: "r", taskId: null })).status),
+  "decision.rationale": async (t) => verdict((await api(w.orch, "POST", W(w, "/decisions"), { title: "QA-E2E-SEC dec", body: "", rationale: clean(t), taskId: null })).status),
+  "agent.label": async (t) => verdict((await api(w.orch, "POST", W(w, "/agents"), { roleId: w.roles.qa, kind: "codex", label: `qa-e2e ${t}`.slice(0, 60), scopes: ["board:read"] })).status),
+  "mcp.send_request.title": async (t) => mcpVerdict(await tool(feAgent.token, "send_request", { to: "backend", title: clean(t), body: "ok" })),
+  "mcp.send_request.body": async (t) => mcpVerdict(await tool(feAgent.token, "send_request", { to: "backend", title: "QA-E2E-SEC mcp", body: clean(t) })),
   "mcp.post_status.doing": async (t) => {
-    const a = await createAgent(bao); // fresh agent: status bucket is 6/min
-    const r = await tool(a.token, "post_status", { presence: "idle", doing: clean(t) });
-    return verdict(toolErrCode(r) === "secret_detected" ? 422 : r.isError ? 400 : 200);
+    const a = await createAgent(w, "qa"); // fresh agent: status bucket is 6/min
+    return mcpVerdict(await tool(a.token, "post_status", { presence: "idle", doing: clean(t) }));
   },
   "mcp.post_status.branch": async (t) => {
-    const a = await createAgent(bao);
-    const r = await tool(a.token, "post_status", { presence: "idle", branch: clean(t) });
-    return verdict(toolErrCode(r) === "secret_detected" ? 422 : r.isError ? 400 : 200);
+    const a = await createAgent(w, "qa");
+    return mcpVerdict(await tool(a.token, "post_status", { presence: "idle", branch: clean(t) }));
+  },
+  "mcp.post_status.paths": async (t) => {
+    const a = await createAgent(w, "qa");
+    return mcpVerdict(await tool(a.token, "post_status", { presence: "idle", paths: [clean(t)] }));
   },
   "mcp.reply_draft.body": async (t) => {
-    const rq = await sentRequest(bao, MEMBER.trang, { title: uniq("QA-E2E-SEC-rd") });
-    const r = await tool(trangAgent.token, "reply_draft", { requestId: rq.id, body: clean(t) });
-    return verdict(toolErrCode(r) === "secret_detected" ? 422 : r.isError ? 400 : 200);
+    const rq = await assign(w, "backend", { title: uniq("QA-E2E-SEC-rd") });
+    return mcpVerdict(await tool(beAgent.token, "reply_draft", { requestId: rq.id, body: clean(t) }));
   },
-  "human.send.body(edit)": async (t) => {
-    const d = await draftRequest(bao, MEMBER.trang);
-    return verdict((await act(bao, d.id, "send", clean(t))).status);
+  "mcp.propose_decision.title": async (t) => {
+    const a = await createAgent(w, "design");
+    return mcpVerdict(await tool(a.token, "propose_decision", { title: clean(t), body: "b", rationale: "r" }));
   },
-  "human.draft_reply.body": async (t) => {
-    const rq = await sentRequest(bao, MEMBER.trang, { title: uniq("QA-E2E-SEC-dr") });
-    return verdict((await act(trang, rq.id, "draft_reply", clean(t))).status);
+  "mcp.propose_decision.body": async (t) => {
+    const a = await createAgent(w, "design");
+    return mcpVerdict(await tool(a.token, "propose_decision", { title: "QA-E2E-SEC prop", body: clean(t), rationale: "r" }));
   },
-  "human.send_reply.body": async (t) => {
-    const rq = await sentRequest(bao, MEMBER.trang, { title: uniq("QA-E2E-SEC-sr") });
-    return verdict((await act(trang, rq.id, "send_reply", clean(t))).status);
+  "mcp.propose_decision.rationale": async (t) => {
+    const a = await createAgent(w, "design");
+    return mcpVerdict(await tool(a.token, "propose_decision", { title: "QA-E2E-SEC prop", body: "b", rationale: clean(t) }));
   },
-  "human.follow_up.body": async (t) => {
-    const rq = await sentRequest(bao, MEMBER.trang, { title: uniq("QA-E2E-SEC-fu") });
-    await act(trang, rq.id, "send_reply", "ok answer");
-    return verdict((await act(bao, rq.id, "follow_up", clean(t))).status);
+  "orchestrator.send.body(edit of an agent draft)": async (t) => verdict((await act(w, await freshDraft(), "send", clean(t))).status),
+  "orchestrator.draft_reply.body": async (t) => verdict((await act(w, (await assign(w, "backend", { title: uniq("QA-E2E-SEC-dr") })).id, "draft_reply", clean(t))).status),
+  "orchestrator.send_reply.body": async (t) => verdict((await act(w, (await assign(w, "backend", { title: uniq("QA-E2E-SEC-sr") })).id, "send_reply", clean(t))).status),
+  "orchestrator.follow_up.body": async (t) => {
+    const rq = await assign(w, "backend", { title: uniq("QA-E2E-SEC-fu") });
+    await act(w, rq.id, "send_reply", "ok answer");
+    return verdict((await act(w, rq.id, "follow_up", clean(t))).status);
+  },
+  "proposal.accept(edited body)": async (t) => {
+    const a = await createAgent(w, ROLE_KEYS[propCount++ % ROLE_KEYS.length]!); // a rejected accept leaves the proposal pending: spread over roles (5 pending per role max)
+    const p = (await tool(a.token, "propose_decision", { title: "QA-E2E-SEC prop", body: "b", rationale: "r" })).data.proposalId;
+    return verdict((await api(w.orch, "POST", W(w, `/proposals/${p}`), { action: "accept", body: clean(t) })).status);
   },
 };
 
@@ -82,7 +99,7 @@ describe("secret rejection hygiene", () => {
   it("never echoes the value, audits only rule+field, writes nothing to requests/messages/events/audit", async () => {
     const secret = FAKE.github();
     const marker = uniq("QA-E2E-hygiene");
-    const r = await api(bao, "POST", W("/requests"), { receiverId: MEMBER.trang, title: marker, body: `use ${secret} please`, taskId: null, dueAt: null });
+    const r = await postRequest(marker, `use ${secret} please`);
     expect(r.status).toBe(422);
     expect(r.text).not.toContain(secret);
     expect(r.body.error.message).toMatch(/github-token/);
@@ -91,15 +108,26 @@ describe("secret rejection hygiene", () => {
     expect((await db`SELECT count(*)::int AS n FROM request_messages WHERE body LIKE ${"%" + secret + "%"}`)[0]!.n).toBe(0);
     expect((await db`SELECT count(*)::int AS n FROM events WHERE data::text LIKE ${"%" + secret + "%"}`)[0]!.n).toBe(0);
     expect((await db`SELECT count(*)::int AS n FROM audit_log WHERE meta::text LIKE ${"%" + secret + "%"} OR action LIKE ${"%" + secret + "%"}`)[0]!.n).toBe(0);
-    const audit = (await api(phong, "GET", W("/audit"))).body as any[];
-    const row = audit.find((e) => e.action === "secret.rejected" && e.actorMemberId === MEMBER.bao);
+    const audit = (await api(w.orch, "GET", W(w, "/audit"))).body as any[];
+    const row = audit.find((e) => e.action === "secret.rejected" && e.actorMemberId === w.orchestratorId);
     expect(row.detail).toEqual({ rule: "github-token", field: "body" });
     expect(JSON.stringify(audit)).not.toContain(secret);
+  });
+  it("an agent's rejected secret is audited against the agent (rule + field only) and stores nothing", async () => {
+    const secret = FAKE.openai();
+    const r = await tool(feAgent.token, "send_request", { to: "backend", title: uniq("QA-E2E-hyg-agent"), body: `key ${secret}` });
+    expect(toolErrCode(r)).toBe("secret_detected");
+    expect(JSON.stringify(r.res.body)).not.toContain(secret);
+    const audit = (await api(w.orch, "GET", W(w, "/audit"))).body as any[];
+    const row = audit.find((e) => e.action === "secret.rejected" && e.actorAgentId === feAgent.id);
+    expect(row).toBeTruthy();
+    expect(JSON.stringify(audit)).not.toContain(secret);
+    expect((await sql()`SELECT count(*)::int AS n FROM request_messages WHERE body LIKE ${"%" + secret + "%"}`)[0]!.n).toBe(0);
   });
   it("no secret-looking string is stored anywhere in the whole DB by this suite (spot check on all tables)", async () => {
     const db = sql();
     for (const k of [FAKE.anthropic(), FAKE.openai(), FAKE.github(), FAKE.aws()]) {
-      const n = await db`SELECT (SELECT count(*) FROM request_messages WHERE body LIKE ${"%" + k + "%"}) + (SELECT count(*) FROM requests WHERE title LIKE ${"%" + k + "%"}) + (SELECT count(*) FROM decisions WHERE body LIKE ${"%" + k + "%"} OR rationale LIKE ${"%" + k + "%"} OR title LIKE ${"%" + k + "%"}) + (SELECT count(*) FROM status_cards WHERE doing LIKE ${"%" + k + "%"} OR branch LIKE ${"%" + k + "%"}) AS n`;
+      const n = await db`SELECT (SELECT count(*) FROM request_messages WHERE body LIKE ${"%" + k + "%"}) + (SELECT count(*) FROM requests WHERE title LIKE ${"%" + k + "%"}) + (SELECT count(*) FROM decisions WHERE body LIKE ${"%" + k + "%"} OR rationale LIKE ${"%" + k + "%"} OR title LIKE ${"%" + k + "%"}) + (SELECT count(*) FROM decision_proposals WHERE body LIKE ${"%" + k + "%"} OR rationale LIKE ${"%" + k + "%"} OR title LIKE ${"%" + k + "%"}) + (SELECT count(*) FROM status_cards WHERE doing LIKE ${"%" + k + "%"} OR branch LIKE ${"%" + k + "%"} OR array_to_string(paths, ' ') LIKE ${"%" + k + "%"}) + (SELECT count(*) FROM roles WHERE mission LIKE ${"%" + k + "%"} OR name LIKE ${"%" + k + "%"}) AS n`;
       expect(Number(n[0]!.n)).toBe(0);
     }
   });
@@ -130,7 +158,7 @@ describe("scanner bypass attempts (confirmed gaps are marked known)", () => {
     expect(await stored(FAKE.jwt())).toBe(false);
   });
   known("SEC-04", "an Office Hub agent token itself (oh_agent_...) pasted into the hub", async () => {
-    const a = await createAgent(bao, ["board:read"]);
+    const a = await createAgent(w, "design", ["board:read"]);
     expect(await stored(`my token is ${a.token}`)).toBe(false);
   });
   known("SEC-04", "`Authorization: Bearer <opaque hex>` header paste", async () => {

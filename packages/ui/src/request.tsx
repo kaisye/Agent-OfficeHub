@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ElementType } from "react";
-import type { Actor, Member, Request, RequestAction, RequestMessage, RequestStatus } from "@officehub/shared";
+import type { Actor, Mascot as MascotTraits, Request, RequestAction, RequestMessage, RequestStatus } from "@officehub/shared";
 import { bodyRequirement, canSeeMessage } from "@officehub/shared";
 import { Badge, Button, Card, Icon, cn, type BadgeTone, type ButtonVariant, type IconName } from "./primitives.js";
 import { Mascot } from "./presence.js";
@@ -20,7 +20,7 @@ const STATUS_ICON: Record<RequestStatus, IconName> = {
 const ACTION_HINT_VI: Partial<Record<RequestAction, (name: string) => string>> = {
   send: (n) => `Chỉ khi bạn bấm, yêu cầu mới tới ${n}.`,
   send_reply: (n) => `Câu trả lời tới ${n} khi bạn bấm.`,
-  follow_up: (n) => `Gửi lại cho ${n} kèm câu hỏi thêm.`,
+  follow_up: (n) => `Hỏi lại ${n} kèm câu hỏi thêm.`,
 };
 const ACTION_VARIANT: Record<RequestAction, ButtonVariant> = {
   send: "primary", send_reply: "primary", accept: "primary", follow_up: "secondary", draft_reply: "secondary", cancel: "ghost",
@@ -30,11 +30,19 @@ const ACTION_ICON: Partial<Record<RequestAction, IconName>> = {
 };
 export type RequestActionHandler = (action: RequestAction, request: Request, body?: string) => void;
 
+/** One side of a request as shown in the UI: a role ("Backend") or the orchestrator ("Bạn"). */
+export interface PartyDisplay {
+  displayName: string;
+  mascot: MascotTraits;
+  /** true for the human orchestrator (text it wrote is not "untrusted"). */
+  human?: boolean;
+}
+
 export interface RequestCardProps {
   request: Request;
-  asker: Member;
-  receiver: Member;
-  /** The viewing human (UI always acts as a human). */
+  asker: PartyDisplay;
+  receiver: PartyDisplay;
+  /** The orchestrator (UI always acts as the human gate). */
   viewerMemberId: string;
   /** `body` is provided when the user typed one (required for follow_up / draft_reply / send_reply from sent). */
   onAction?: RequestActionHandler;
@@ -55,25 +63,23 @@ export function RequestCard({ request, asker, receiver, viewerMemberId, onAction
   const [text, setText] = useState("");
   const actor: Actor = { kind: "human", memberId: viewerMemberId };
   const actions = availableActions(request, actor);
-  const side = viewerMemberId === request.askerId ? "asker" : viewerMemberId === request.receiverId ? "receiver" : "observer";
-  const other = side === "receiver" ? asker : receiver;
+  // v0.6: the orchestrator answers to both sides; "other" is the party the next click moves the text to.
+  const other = request.status === "reply_drafted" || request.status === "replied" ? asker : receiver;
 
-  // Drafts are visible only to their owning side (canSeeMessage); never render a hidden one.
-  const visible = request.messages.filter((m) => canSeeMessage(request, m, viewerMemberId));
+  const visible = request.messages.filter((m) => canSeeMessage(request, m, { kind: "human" }));
   const last = visible[visible.length - 1];
-  const authorId = last ? (last.kind === "reply" ? request.receiverId : request.askerId) : null;
-  const authorMember = authorId === asker.id ? asker : receiver;
+  const authorMember = last ? (last.authoredBy === "human" ? null : last.kind === "reply" ? receiver : asker) : null;
   const unsent = !!last && last.sentById === null;
   const agentDraft = unsent && last?.authoredBy === "agent";
-  const mine = authorId === viewerMemberId;
-  const approver = last?.sentById ? (last.sentById === asker.id ? asker : receiver) : null;
+  const mine = !!last && last.authoredBy === "human";
+  const approver = last?.sentById ? "bạn" : null;
 
   const draftAction: RequestAction | null = agentDraft ? (last!.kind === "reply" ? "send_reply" : "send") : null;
   const inlineDraftAction =
     draftAction && actions.includes(draftAction) && bodyRequirement(draftAction, request.status) !== "required" ? draftAction : null;
   const footerActions = actions.filter((a) => a !== inlineDraftAction);
 
-  const { label, help } = requestStatusText(request, side, other.displayName);
+  const { label, help } = requestStatusText(request, { asker: asker.displayName, receiver: receiver.displayName });
   const overdue = !!request.dueAt && ["sent", "reply_drafted", "replied"].includes(request.status) && new Date(request.dueAt).getTime() < +(now ?? Date.now());
 
   const fire = (a: RequestAction, body?: string) =>
@@ -121,7 +127,7 @@ export function RequestCard({ request, asker, receiver, viewerMemberId, onAction
       </div>
 
       {last &&
-        (agentDraft && mine ? (
+        (agentDraft && authorMember ? (
           <DraftBlock
             owner={authorMember}
             onEdit={onEditDraft ? () => onEditDraft(last) : undefined}
@@ -137,12 +143,12 @@ export function RequestCard({ request, asker, receiver, viewerMemberId, onAction
           </p>
         ) : (
           <>
-            <UntrustedQuote authorName={authorMember.displayName} author={authorMember} fromAgent={last.authoredBy === "agent"}>
+            <UntrustedQuote authorName={authorMember?.displayName} author={authorMember ?? undefined} fromAgent={last.authoredBy === "agent"}>
               {last.body}
             </UntrustedQuote>
             {last.authoredBy === "agent" && approver && (
               <p className="text-oh-xs text-oh-ink-muted">
-                Agent soạn · đã duyệt bởi {approver.displayName}
+                Agent soạn · đã duyệt bởi {approver}
                 {last.editedBeforeSend ? " · Đã chỉnh sửa" : ""}
               </p>
             )}

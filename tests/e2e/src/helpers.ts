@@ -1,4 +1,8 @@
-/** Black-box helpers for the live Office Hub stack. No imports from product code: this suite only speaks HTTP / SQL. */
+/**
+ * Black-box helpers for the live Office Hub stack (v0.6: ONE orchestrator + six role seats).
+ * No imports from product code: this suite only speaks HTTP / SQL.
+ * Every test file builds its own isolated workspace with createWorld(), so nothing here depends on seeded data.
+ */
 import { createHash, randomUUID } from "node:crypto";
 import postgres from "postgres";
 
@@ -6,27 +10,33 @@ export const API = process.env.OH_API ?? "http://localhost:8787";
 export const MCP = process.env.OH_MCP ?? "http://localhost:8788/mcp";
 export const WEB = process.env.OH_WEB ?? "http://localhost:3000";
 export const DB_URL = process.env.OH_DB ?? "postgres://officehub:officehub@localhost:5433/officehub";
-export const SLUG = "tripflix";
 export const ORIGIN = "http://localhost:3000";
 /** Everything this suite creates is tagged so teardown can remove it. */
 export const TAG = "QA-E2E";
 export const AGENT_LABEL = "qa-e2e";
+/** Workspaces created by this suite all have a slug starting with this prefix (cleanup.ts relies on it). */
+export const WS_PREFIX = "qa-e2e";
 
-export const MEMBER = {
-  phong: "adcf8a47-7647-4b1f-952a-76723d7a3413", // admin
-  trang: "97c2557b-189e-4b54-8c73-a89dfa40e274",
-  bao: "7f7870ee-bc43-47b5-84fc-001dc3081d57",
-  minh: "3c343b90-4f1b-4be5-a283-34c921c55092",
-  lan: "ed5375c3-a3b1-400c-a0c3-70593a3824e6",
-} as const;
+export const ROLE_KEYS = ["leader", "business", "design", "backend", "frontend", "qa"] as const;
+export type RoleKey = (typeof ROLE_KEYS)[number];
 
-export const ALL_SCOPES = ["board:read", "inbox:read", "status:write:self", "request:draft"];
+export const ALL_SCOPES = ["board:read", "inbox:read", "status:write:self", "request:draft", "decision:read", "decision:propose"];
+
+/** The default seats (docs/ARCHITECTURE.md "Directory ownership"), copied here so the suite stays black-box. */
+const SEATS: { key: RoleKey; name: string; wave: number; buddy: string; paths: string[] }[] = [
+  { key: "leader", name: "Leader", wave: 0, buddy: "sage", paths: ["packages/shared/**", "package.json", "docs/ARCHITECTURE.md"] },
+  { key: "business", name: "Business", wave: 1, buddy: "mocha", paths: ["docs/business/**"] },
+  { key: "design", name: "Design", wave: 1, buddy: "pip", paths: ["packages/brand/**", "packages/ui/**", "docs/design/**"] },
+  { key: "backend", name: "Backend", wave: 1, buddy: "blu", paths: ["packages/db/**", "apps/api/**", "apps/mcp/**", "docs/tech/**"] },
+  { key: "frontend", name: "Frontend", wave: 2, buddy: "milo", paths: ["apps/web/**"] },
+  { key: "qa", name: "QA & Security", wave: 3, buddy: "fern", paths: ["tests/e2e/**", "docs/qa/**"] },
+];
 
 export const uniq = (p = TAG) => `${p}-${randomUUID().slice(0, 8)}`;
 export const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
 let _sql: ReturnType<typeof postgres> | undefined;
-/** Superuser connection (bypasses RLS). Used to set up a 2nd workspace and to inspect storage. */
+/** Superuser connection (bypasses RLS). Used to create workspaces and to inspect storage. */
 export const sql = () => (_sql ??= postgres(DB_URL, { max: 3, onnotice: () => {} }));
 export const closeSql = async () => {
   await _sql?.end();
@@ -78,6 +88,37 @@ export async function login(memberId: string): Promise<Session> {
   return { cookie: sc.split(";")[0]!, memberId, slug: r.body.workspaceSlug, me: r.body };
 }
 
+/* ---------------- worlds (isolated workspaces) ---------------- */
+export interface World {
+  id: string;
+  slug: string;
+  /** member id of the human orchestrator (the only member) */
+  orchestratorId: string;
+  /** role key -> role id */
+  roles: Record<RoleKey, string>;
+  /** the orchestrator's logged-in session */
+  orch: Session;
+}
+
+/** Creates (in SQL, as superuser) a fresh workspace with one orchestrator and the six default roles, and logs the orchestrator in. */
+export async function createWorld(prefix = "t", slug?: string): Promise<World> {
+  const db = sql();
+  const id = randomUUID();
+  const ws = slug ?? `${WS_PREFIX}-${prefix}-${id.slice(0, 8)}`;
+  await db`INSERT INTO workspaces (id, name, slug, connectors) VALUES (${id}, ${"QA " + ws}, ${ws}, ${["github"]}::text[])`;
+  const orchestratorId = randomUUID();
+  await db`INSERT INTO members (id, workspace_id, display_name, github_login, role, areas, mascot)
+    VALUES (${orchestratorId}, ${id}, 'QA Orchestrator', ${`qa-orch-${id.slice(0, 6)}`}, 'admin', '{}'::text[], ${db.json({ buddy: "blu" })})`;
+  const roles = {} as Record<RoleKey, string>;
+  for (const s of SEATS) {
+    const rid = randomUUID();
+    roles[s.key] = rid;
+    await db`INSERT INTO roles (id, workspace_id, key, name, mission, owned_paths, handoff_path, wave, mascot)
+      VALUES (${rid}, ${id}, ${s.key}, ${s.name}, '', ${s.paths}::text[], null, ${s.wave}, ${db.json({ buddy: s.buddy })})`;
+  }
+  return { id, slug: ws, orchestratorId, roles, orch: await login(orchestratorId) };
+}
+
 /** Human-session request (cookie + CSRF header + Origin, like the web app). `extra` can override/remove headers. */
 export function api(s: Session | null, method: string, path: string, body?: unknown, extra: Record<string, string | undefined> = {}): Promise<Res> {
   const headers: Record<string, string> = { "content-type": "application/json", "x-officehub-csrf": "1", origin: ORIGIN };
@@ -92,21 +133,26 @@ export function api(s: Session | null, method: string, path: string, body?: unkn
 /** Raw request with exact headers (no defaults). */
 export const raw = (method: string, path: string, headers: Record<string, string> = {}, body?: string, base = API) => doFetch(base + path, { method, headers, body });
 
-export const W = (path: string, slug = SLUG) => `/w/${slug}${path}`;
+/** Workspace-scoped path. `w` is a world, a session, or a slug. */
+export const W = (w: { slug: string } | string, path: string) => `/w/${typeof w === "string" ? w : w.slug}${path}`;
 
-export const board = async (s: Session) => (await api(s, "GET", W("/board", s.slug))).body;
+export const board = async (w: World) => (await api(w.orch, "GET", W(w, "/board"))).body;
+export const queue = async (w: World) => (await api(w.orch, "GET", W(w, "/queue"))).body as { requests: any[]; proposals: any[] };
+export const roleStatus = (w: World, roleKey: RoleKey, over: Record<string, unknown> = {}) =>
+  api(w.orch, "PUT", W(w, `/roles/${w.roles[roleKey]}/status`), { presence: "idle", doing: null, branch: null, waitingOn: [], ...over });
 
 /* ---------------- agents / MCP ---------------- */
 export interface AgentCred {
   id: string;
   token: string;
-  ownerId: string;
+  roleKey: RoleKey;
+  roleId: string;
 }
-/** Creates an agent through the real API (human click equivalent). Tagged for teardown. */
-export async function createAgent(s: Session, scopes: string[] = ALL_SCOPES, kind = "codex"): Promise<AgentCred> {
-  const r = await api(s, "POST", W("/agents", s.slug), { kind, label: `${AGENT_LABEL}-${randomUUID().slice(0, 6)}`, scopes });
+/** Creates an agent for a role through the real API (the orchestrator's click). Tagged for teardown. */
+export async function createAgent(w: World, roleKey: RoleKey, scopes: string[] = ALL_SCOPES, kind = "codex"): Promise<AgentCred> {
+  const r = await api(w.orch, "POST", W(w, "/agents"), { roleId: w.roles[roleKey], kind, label: `${AGENT_LABEL}-${randomUUID().slice(0, 6)}`, scopes });
   if (r.status !== 201) throw new Error(`createAgent ${r.status} ${r.text}`);
-  return { id: r.body.agent.id, token: r.body.token, ownerId: s.memberId };
+  return { id: r.body.agent.id, token: r.body.token, roleKey, roleId: w.roles[roleKey] };
 }
 
 let rpcId = 1;
@@ -143,16 +189,38 @@ export async function tool(token: string | null, name: string, args: Record<stri
 }
 export const toolErrCode = (r: ToolResult): string | undefined => r.data?.error?.code ?? r.rpcError?.data?.code;
 
+/** Bearer-token request to the API (what agent hooks do). */
+export const asAgent = (token: string, method: string, path: string, body?: unknown, extra: Record<string, string> = {}) =>
+  raw(method, path, { authorization: `Bearer ${token}`, "content-type": "application/json", "x-officehub-csrf": "1", ...extra }, body === undefined ? undefined : JSON.stringify(body));
+
 /* ---------------- requests ---------------- */
-export async function draftRequest(asker: Session, receiverId: string, over: Partial<{ title: string; body: string; taskId: string | null; dueAt: string | null }> = {}) {
-  const r = await api(asker, "POST", W("/requests", asker.slug), { receiverId, title: over.title ?? uniq(`${TAG}-t`), body: over.body ?? uniq(`${TAG}-b`), taskId: over.taskId ?? null, dueAt: over.dueAt ?? null });
-  if (r.status !== 201) throw new Error(`draftRequest ${r.status} ${r.text}`);
+type ReqOver = Partial<{ title: string; body: string; kind: string; taskId: string | null; dueAt: string | null }>;
+
+/** The orchestrator assigns work to a role: created already `sent`. */
+export async function assign(w: World, to: RoleKey, over: ReqOver = {}) {
+  const r = await api(w.orch, "POST", W(w, "/requests"), {
+    receiverRoleId: w.roles[to],
+    kind: over.kind ?? "question",
+    title: over.title ?? uniq(`${TAG}-t`),
+    body: over.body ?? uniq(`${TAG}-b`),
+    taskId: over.taskId ?? null,
+    dueAt: over.dueAt ?? null,
+  });
+  if (r.status !== 201) throw new Error(`assign ${r.status} ${r.text}`);
   return r.body;
 }
-export const act = (s: Session, id: string, action: string, body?: string) => api(s, "POST", W(`/requests/${id}/actions`, s.slug), body === undefined ? { action } : { action, body });
-export async function sentRequest(asker: Session, receiverId: string, over: Parameters<typeof draftRequest>[2] = {}) {
-  const d = await draftRequest(asker, receiverId, over);
-  const s = await act(asker, d.id, "send");
+/** An agent drafts a request through MCP send_request (status `draft`, waits in the approval queue). */
+export async function agentDraft(a: AgentCred, to: RoleKey | "orchestrator", over: ReqOver = {}) {
+  const r = await tool(a.token, "send_request", { to, kind: over.kind ?? "question", title: over.title ?? uniq(`${TAG}-t`), body: over.body ?? uniq(`${TAG}-b`), taskId: over.taskId ?? null, dueAt: over.dueAt ?? null });
+  if (r.isError) throw new Error(`agentDraft ${r.status} ${r.blocks.join(" ")}`);
+  return { id: r.data.requestId as string, status: r.data.status as string };
+}
+export const act = (w: World, id: string, action: string, body?: string, extra: Record<string, unknown> = {}) =>
+  api(w.orch, "POST", W(w, `/requests/${id}/actions`), { action, ...(body === undefined ? {} : { body }), ...extra });
+/** agent drafts, orchestrator forwards (`send`). Returns the sent request. */
+export async function agentSent(w: World, a: AgentCred, to: RoleKey | "orchestrator", over: ReqOver = {}) {
+  const d = await agentDraft(a, to, over);
+  const s = await act(w, d.id, "send");
   if (s.status !== 200) throw new Error(`send ${s.status} ${s.text}`);
   return s.body;
 }

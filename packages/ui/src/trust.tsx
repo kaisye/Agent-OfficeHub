@@ -15,7 +15,7 @@ export function DraftBlock({
 }: {
   children: ReactNode;
   /** Member whose agent drafted this (mascot gets the bot badge). */
-  owner?: Member;
+  owner?: Pick<Member, "mascot" | "displayName">;
   onEdit?: () => void;
   onSend?: () => void;
   sendLabel?: string;
@@ -72,7 +72,7 @@ export function UntrustedQuote({
 }: {
   /** Display name of the member author. Optional when `source` identifies the origin. */
   authorName?: string;
-  author?: Member;
+  author?: Pick<Member, "mascot" | "displayName">;
   /** Mirrors `Untrusted.authorMemberId` (null = external); accepted for convenience, `source` decides the label. */
   authorMemberId?: string | null;
   /** Mirrors `Untrusted.source`, e.g. "github". Used when there is no member author. */
@@ -166,7 +166,7 @@ const dateVi = (iso: string) => {
 };
 
 /** Decisions are written by humans only — shown with the decider's mascot (never a bot badge). */
-export function DecisionCard({ decision, decidedBy, className }: { decision: Decision; decidedBy: Member; className?: string }) {
+export function DecisionCard({ decision, decidedBy, className }: { decision: Decision; decidedBy: Pick<Member, "mascot" | "displayName">; className?: string }) {
   return (
     <Card as="article" className={className} aria-label={`Quyết định: ${decision.title}`}>
       <header className="flex items-start gap-3">

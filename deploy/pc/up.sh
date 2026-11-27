@@ -56,9 +56,12 @@ until docker exec officehub-pg pg_isready -U officehub -d officehub >/dev/null 2
 [ -d .git ] && git pull --ff-only
 pnpm install --frozen-lockfile
 pnpm db:migrate
-if [ ! -f "$HOME/.officehub-seed.txt" ]; then
-  (umask 077; pnpm db:seed > "$HOME/.officehub-seed.txt")
-  echo "seeded (member ids + dev agent tokens in ~/.officehub-seed.txt)"
+# Seed is idempotent (skips when the workspace exists). Only a fresh seed prints agent tokens: keep them, once.
+SEED_OUT=$(pnpm --silent db:seed)
+if printf '%s' "$SEED_OUT" | grep -q '^seeded workspace'; then
+  (umask 077; printf '%s\n' "$SEED_OUT" > "$HOME/.officehub-seed.txt")
+  echo "seeded: role ids + one agent token per role in ~/.officehub-seed.txt (shown once)"
+  echo "sign-in link for the orchestrator:"; pnpm --silent db:invite
 fi
 export NEXT_PUBLIC_API_MODE=http NEXT_PUBLIC_API_URL="http://${HOST}:8787" NEXT_PUBLIC_MCP_URL="http://${HOST}:8788/mcp"
 pnpm --filter @officehub/web build

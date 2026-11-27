@@ -1,40 +1,35 @@
-import { randomUUID } from "node:crypto";
-import { createAgent, login, sha256, sql, type Session } from "./helpers.js";
+import { WS_PREFIX, createAgent, createWorld, sql, type AgentCred, type Session, type World } from "./helpers.js";
 
-export const WS2_SLUG = "qa-e2e-other";
-const mascot = { buddy: "pip" };
+export const WS2_SLUG = `${WS_PREFIX}-other`;
 
 export interface Tenant2 {
+  world: World;
   workspaceId: string;
   slug: string;
-  eve: Session; // admin
-  mallory: Session; // member
+  /** the orchestrator of the second workspace (kept under the v0.5 name `eve` for the Playwright specs) */
+  eve: Session;
   eveId: string;
-  malloryId: string;
-  agentToken: string; // Eve's agent, created straight in SQL (valid token, hashed like the product does)
+  agent: AgentCred; // a backend-role agent of this workspace
+  agentToken: string;
 }
 
 /**
- * A second workspace created directly in SQL (superuser). It is created once and REUSED between runs: it accumulates
- * append-only audit rows, so it cannot be dropped without tampering with the audit log.
+ * A second workspace (v0.6: its own orchestrator + six roles) used for cross-tenant checks. It is created once and REUSED between
+ * runs: it accumulates append-only audit rows, so it cannot be dropped. Tests that need a throwaway one call createWorld().
  */
 export async function ensureTenant2(): Promise<Tenant2> {
-  const db = sql();
-  let [ws] = await db`SELECT id FROM workspaces WHERE slug = ${WS2_SLUG}`;
-  if (!ws) [ws] = await db`INSERT INTO workspaces (name, slug) VALUES ('QA Other Co', ${WS2_SLUG}) RETURNING id`;
-  const workspaceId = ws!.id as string;
-  const ensureMember = async (name: string, role: string) => {
-    const [m] = await db`SELECT id FROM members WHERE workspace_id = ${workspaceId} AND display_name = ${name}`;
-    if (m) return m.id as string;
-    const [n] = await db`INSERT INTO members (workspace_id, display_name, role, mascot, github_login) VALUES (${workspaceId}, ${name}, ${role}, ${db.json(mascot)}, ${"qa-" + name.toLowerCase()}) RETURNING id`;
-    return n!.id as string;
-  };
-  const eveId = await ensureMember("Eve", "admin");
-  const malloryId = await ensureMember("Mallory", "member");
-  const token = "oh_agent_" + randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "").slice(0, 10);
-  await db`INSERT INTO agents (workspace_id, owner_id, kind, label, scopes, token_hash, token_prefix)
-    VALUES (${workspaceId}, ${eveId}, 'codex', 'qa-e2e-eve', ${["board:read", "inbox:read", "status:write:self", "request:draft"]}, ${sha256(token)}, ${token.slice(9, 17)})`;
-  return { workspaceId, slug: WS2_SLUG, eve: await login(eveId), mallory: await login(malloryId), eveId, malloryId, agentToken: token };
+  const [ws] = await sql()`SELECT id FROM workspaces WHERE slug = ${WS2_SLUG}`;
+  let world: World;
+  if (!ws) world = await createWorld("other", WS2_SLUG);
+  else {
+    const db = sql();
+    const [m] = await db`SELECT id FROM members WHERE workspace_id = ${ws.id} AND role = 'admin' ORDER BY created_at LIMIT 1`;
+    const rs = await db`SELECT id, key FROM roles WHERE workspace_id = ${ws.id}`;
+    const { login } = await import("./helpers.js");
+    world = { id: ws.id as string, slug: WS2_SLUG, orchestratorId: m!.id as string, roles: Object.fromEntries(rs.map((r) => [r.key, r.id])) as World["roles"], orch: await login(m!.id as string) };
+  }
+  const agent = await createAgent(world, "backend");
+  return { world, workspaceId: world.id, slug: world.slug, eve: world.orch, eveId: world.orchestratorId, agent, agentToken: agent.token };
 }
 
 export { createAgent };

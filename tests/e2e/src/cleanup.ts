@@ -1,33 +1,34 @@
 /**
  * Removes what the QA suite created in the shared dev DB, WITHOUT touching the append-only tables
  * (events / audit_log are immutable by design and are never modified or deleted here).
- *  - requests, messages, read-markers and decisions tagged "QA-*" are deleted (the log rows that mention them stay)
- *  - QA agents are REVOKED (they cannot be deleted: events keep an FK to them)
- *  - the dedicated second workspace "qa-e2e-other" is kept and reused between runs (it carries audit rows, so it cannot be dropped)
- *  - status cards are restored to the snapshot taken before the run
+ * Scope: ONLY workspaces whose slug starts with "qa-e2e" (every test file builds its own via createWorld()).
+ *  - requests, messages, read markers, proposals, decisions and status cards of those workspaces are deleted
+ *  - their agents are REVOKED (they cannot be deleted: events keep an FK to them)
+ *  - the workspaces, members and roles stay (they carry audit rows, so they cannot be dropped)
  */
-import { closeSql, sql } from "./helpers.js";
+import { WS_PREFIX, closeSql, sql } from "./helpers.js";
 
+/** Kept for the Playwright global setup, which still imports it (v0.5 snapshot of member cards; nothing to restore in v0.6). */
 export type CardSnapshot = Record<string, unknown>[];
-
 export async function snapshotCards(): Promise<CardSnapshot> {
-  return (await sql()`SELECT * FROM status_cards`) as unknown as CardSnapshot;
+  return [];
 }
 
-export async function cleanup(cards?: CardSnapshot): Promise<void> {
+export async function cleanup(_cards?: CardSnapshot): Promise<void> {
   await sql().begin(async (tx) => {
-    const agents = (await tx`SELECT id FROM agents WHERE label LIKE 'qa-%'`).map((r) => r.id as string);
-    const reqs = (
-      await tx`SELECT id FROM requests WHERE title LIKE 'QA-%' OR id IN (SELECT request_id FROM request_messages WHERE author_agent_id = ANY(${agents}::uuid[]))`
-    ).map((r) => r.id as string);
-    await tx`DELETE FROM inbox_reads WHERE request_id = ANY(${reqs}::uuid[])`;
-    await tx`DELETE FROM request_messages WHERE request_id = ANY(${reqs}::uuid[])`;
-    await tx`DELETE FROM requests WHERE id = ANY(${reqs}::uuid[])`;
-    await tx`DELETE FROM decisions WHERE title LIKE 'QA-%'`;
-    await tx`UPDATE agents SET revoked_at = COALESCE(revoked_at, now()) WHERE id = ANY(${agents}::uuid[])`;
-    for (const c of (cards ?? []) as any[]) {
-      await tx`UPDATE status_cards SET presence = ${c.presence}, doing = ${c.doing}, branch = ${c.branch}, waiting_on = ${c.waiting_on}::uuid[], updated_by = ${c.updated_by}, updated_at = ${c.updated_at} WHERE member_id = ${c.member_id}`;
-    }
+    const ws = (await tx`SELECT id FROM workspaces WHERE slug LIKE ${WS_PREFIX + "%"}`).map((r) => r.id as string);
+    if (!ws.length) return;
+    const any = (a: string[]) => tx.array(a, 2950); // uuid[]
+    await tx`UPDATE agents SET revoked_at = COALESCE(revoked_at, now()) WHERE workspace_id = ANY(${any(ws)})`;
+    await tx`DELETE FROM inbox_reads WHERE workspace_id = ANY(${any(ws)})`;
+    await tx`DELETE FROM role_reads WHERE workspace_id = ANY(${any(ws)})`;
+    await tx`DELETE FROM request_messages WHERE workspace_id = ANY(${any(ws)})`;
+    await tx`DELETE FROM requests WHERE workspace_id = ANY(${any(ws)})`;
+    await tx`UPDATE decisions SET proposal_id = NULL WHERE workspace_id = ANY(${any(ws)})`;
+    await tx`UPDATE decision_proposals SET decision_id = NULL WHERE workspace_id = ANY(${any(ws)})`;
+    await tx`DELETE FROM decisions WHERE workspace_id = ANY(${any(ws)})`;
+    await tx`DELETE FROM decision_proposals WHERE workspace_id = ANY(${any(ws)})`;
+    await tx`DELETE FROM status_cards WHERE workspace_id = ANY(${any(ws)})`;
   });
 }
 
