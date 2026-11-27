@@ -136,32 +136,32 @@ describe("secret rejection hygiene", () => {
 describe("scanner bypass attempts (confirmed gaps are marked known)", () => {
   const stored = async (text: string) => (await writers["request.body"]!(text)).stored;
 
-  known("SEC-03", "zero-width / format characters inside a key must not defeat the scanner (sk-ant-<ZWSP>...)", async () => {
+  it("[SEC-03] zero-width / format characters inside a key must not defeat the scanner (sk-ant-<ZWSP>...)", async () => {
     const k = FAKE.anthropic().replace("sk-ant-", "sk-ant-​");
     expect(await stored(k)).toBe(false);
   });
-  known("SEC-03", "zero-width joiner inside a GitHub token", async () => {
+  it("[SEC-03] zero-width joiner inside a GitHub token", async () => {
     const k = FAKE.github().replace("ghp_", "ghp_‍");
     expect(await stored(k)).toBe(false);
   });
-  known("SEC-03", "Unicode fullwidth letters (ｓｋ-ant-...) normalise to a key (NFKC) and must be caught", async () => {
+  it("[SEC-03] Unicode fullwidth letters (ｓｋ-ant-...) normalise to a key (NFKC) and must be caught", async () => {
     const k = FAKE.anthropic().replace("sk", "ｓｋ");
     expect(await stored(k)).toBe(false);
   });
-  known("SEC-04", "Stripe live secret key (sk_live_...) is a well-known format", async () => {
+  it("[SEC-04] Stripe live secret key (sk_live_...) is a well-known format", async () => {
     expect(await stored(FAKE.stripe())).toBe(false);
   });
-  known("SEC-04", "database URL with an inline password", async () => {
+  it("[SEC-04] database URL with an inline password", async () => {
     expect(await stored(FAKE.dbUrl())).toBe(false);
   });
-  known("SEC-04", "JWT (three base64url segments)", async () => {
+  it("[SEC-04] JWT (three base64url segments)", async () => {
     expect(await stored(FAKE.jwt())).toBe(false);
   });
-  known("SEC-04", "an Office Hub agent token itself (oh_agent_...) pasted into the hub", async () => {
+  it("[SEC-04] an Office Hub agent token itself (oh_agent_...) pasted into the hub", async () => {
     const a = await createAgent(w, "design", ["board:read"]);
     expect(await stored(`my token is ${a.token}`)).toBe(false);
   });
-  known("SEC-04", "`Authorization: Bearer <opaque hex>` header paste", async () => {
+  it("[SEC-04] `Authorization: Bearer <opaque hex>` header paste", async () => {
     expect(await stored("Authorization: Bearer 0123456789abcdef0123456789abcdef01234567")).toBe(false);
   });
   it("lowercased AWS key id is not a real credential format (accepted: documented limitation)", async () => {

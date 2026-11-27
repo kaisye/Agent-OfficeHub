@@ -51,7 +51,7 @@ curl -s -X POST http://localhost:8788/mcp -H "authorization: Bearer $TOKEN" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_board","arguments":{}}}'
 ```
 
-GitHub webhook: point a repo webhook (content type JSON, events: pull requests, check suites, workflow runs, issues, deployment statuses) at `POST /hooks/github/<workspaceId>` with secret `GITHUB_WEBHOOK_SECRET`.
+GitHub webhook: point a repo webhook (content type JSON, events: pull requests, check suites, workflow runs, issues, deployment statuses) at `POST /hooks/github/<workspaceId>`. The secret is per workspace (HMAC of `GITHUB_WEBHOOK_SECRET` and the workspace id): the orchestrator reads the payload URL and secret from `GET /w/<slug>/connectors/github`. A signature made for one workspace is rejected by every other one.
 
 ## API conventions the web depends on
 

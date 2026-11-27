@@ -16,7 +16,9 @@ let child: ChildProcess;
 let w: World;
 let other: World;
 
-const sig = (body: string, secret = SECRET) => "sha256=" + createHmac("sha256", secret).update(body).digest("hex");
+/** SEC-08: the per-workspace secret GitHub is configured with (GET /w/:slug/connectors/github). */
+const wsSecret = (id: string) => createHmac("sha256", SECRET).update(id).digest("hex");
+const sig = (body: string, secret = wsSecret(w.id)) => "sha256=" + createHmac("sha256", secret).update(body).digest("hex");
 const post = (wsId: string, body: string, headers: Record<string, string>) => raw("POST", `/hooks/github/${wsId}`, { "content-type": "application/json", ...headers }, body, BASE);
 const pr = (n: number, title = "QA-E2E webhook PR", extra: Record<string, unknown> = {}) =>
   JSON.stringify({ action: "opened", pull_request: { number: n, title, html_url: "https://example.test/pr", user: { login: "nobody-qa" }, draft: false, ...extra }, repository: { full_name: "qa/qa" } });
@@ -81,13 +83,13 @@ describe("events and workspaces", () => {
       expect(r.status, b).toBeLessThan(500);
     }
   });
-  known("BUG-02", "a correctly signed JSON `null` payload must be ignored or 400, not an unhandled 500 (the event mapper dereferences null)", async () => {
+  it("[BUG-02] a correctly signed JSON `null` payload must be ignored or 400, not an unhandled 500 (the event mapper dereferences null)", async () => {
     const r = await post(w.id, "null", { ...ev, "x-hub-signature-256": sig("null"), "x-github-delivery": "qa-" + randomUUID() });
     expect(r.status).toBeLessThan(500);
   });
-  it("unknown / malformed workspace id -> 404", async () => {
+  it("unknown workspace id -> 401 (no secret can match it), malformed id -> 404", async () => {
     const body = pr(9103);
-    expect((await post(randomUUID(), body, { ...ev, "x-hub-signature-256": sig(body) })).status).toBe(404);
+    expect((await post(randomUUID(), body, { ...ev, "x-hub-signature-256": sig(body) })).status).toBe(401);
     expect((await post("not-a-uuid", body, { ...ev, "x-hub-signature-256": sig(body) })).status).toBe(404);
   });
   it("hostile PR title is stored verbatim (data, escaped on render) and never executed server-side", async () => {
@@ -98,12 +100,12 @@ describe("events and workspaces", () => {
     const [t] = await sql()`SELECT title FROM tasks WHERE workspace_id = ${w.id} AND external_key = '#9104'`;
     expect(t!.title).toBe(title);
   });
-  known("SEC-08", "one shared webhook secret signs for EVERY workspace id: a payload valid for workspace A is accepted for workspace B (needs per-workspace secrets before a 2nd tenant)", async () => {
+  it("[SEC-08] one shared webhook secret signs for EVERY workspace id: a payload valid for workspace A is accepted for workspace B (needs per-workspace secrets before a 2nd tenant)", async () => {
     const body = pr(9105);
     const r = await post(other.id, body, { ...ev, "x-hub-signature-256": sig(body), "x-github-delivery": "qa-" + randomUUID() });
-    expect(r.status).toBe(401); // today: 200 ingested into an unrelated workspace
+    expect(r.status).toBe(401);
   });
-  known("BUG-03", "CON-03: a PR title that looks like a key must NOT create a task/event (200 to GitHub, audit secret_rejected source=github)", async () => {
+  it("[BUG-03] CON-03: a PR title that looks like a key must NOT create a task/event (200 to GitHub, audit secret_rejected source=github)", async () => {
     const key = ["sk", "ant", "api03", "ZZxxYYwwVVuuTTssRRqqPP1122"].join("-");
     const body = pr(9107, `fix: rotate ${key}`);
     const r = await post(w.id, body, { ...ev, "x-hub-signature-256": sig(body), "x-github-delivery": "qa-" + randomUUID() });
@@ -111,7 +113,7 @@ describe("events and workspaces", () => {
     const n = (await sql()`SELECT count(*)::int AS n FROM tasks WHERE workspace_id = ${w.id} AND title LIKE ${"%" + key + "%"}`)[0]!.n;
     expect(n).toBe(0);
   });
-  known("SEC-09","task external_url from a webhook must be http(s) only (javascript: URLs are stored and returned to humans/agents)", async () => {
+  it("[SEC-09] task external_url from a webhook must be http(s) only (javascript: URLs are stored and returned to humans/agents)", async () => {
     const body = pr(9106, "QA-E2E url", { html_url: "javascript:alert(3)" });
     await post(w.id, body, { ...ev, "x-hub-signature-256": sig(body), "x-github-delivery": "qa-" + randomUUID() });
     const [t] = await sql()`SELECT external_url FROM tasks WHERE workspace_id = ${w.id} AND external_key = '#9106'`;

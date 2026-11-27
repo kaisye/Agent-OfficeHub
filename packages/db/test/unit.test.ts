@@ -109,3 +109,31 @@ describe("request transitions (shared canTransition, v0.6)", () => {
       for (const a of actions) expect(canTransition({ status, askerRoleId: "A", receiverRoleId: "R" }, a, { kind: "human", memberId: "H" }).ok).toBe(false);
   });
 });
+
+describe("hardening (SEC-03/04, SEC-08/09, BUG-02)", async () => {
+  const { normaliseForScan } = await import("../src/secrets.js");
+  const { mapGithubEvent, safeUrl, workspaceWebhookSecret } = await import("../src/github.js");
+  it("catches keys split by invisible characters or written in fullwidth letters", () => {
+    const k = ["sk", "ant", "api03", "A1b2C3d4E5f6G7h8I9j0K1l2M3"].join("-");
+    expect(scanText(k.replace("sk-ant-", "sk-ant-​"))).toBe("anthropic-api-key");
+    expect(scanText(k.replace("sk", "ｓｋ"))).toBe("anthropic-api-key");
+    expect(normaliseForScan("a‍b­c")).toBe("abc");
+  });
+  it.each([
+    ["sk_live_" + "4eC39HqLyjWDarjtT1zdp7dc", "stripe-secret-key"],
+    ["postgres://admin:" + "SuperS3cretPw" + "@db.internal:5432/prod", "url-with-password"],
+    [["eyJhbGciOiJIUzI1NiJ9", "eyJzdWIiOiIxMjM0NTY3ODkwIn0", "dozjgNryP4J3jVmNHl0w5N_XgL0n3I9P"].join("."), "jwt"],
+    ["my token is oh_agent_" + "Abc123Def456Ghi789Jkl012", "office-hub-agent-token"],
+    ["Authorization: Bearer 0123456789abcdef0123456789abcdef", "bearer-token"],
+  ])("detects %s", (text, rule) => expect(scanText(text)).toBe(rule));
+  it("leaves ordinary text and plain URLs alone", () => {
+    expect(scanText("Xem https://github.com/o/r/pull/7 và postgres://localhost:5433/officehub")).toBeNull();
+  });
+  it("webhook: null payload ignored, only http(s) links kept, secrets differ per workspace", () => {
+    expect(mapGithubEvent("pull_request", null)).toBeNull();
+    expect(safeUrl("javascript:alert(1)")).toBeNull();
+    expect(safeUrl("https://github.com/o/r/pull/1")).toBe("https://github.com/o/r/pull/1");
+    expect(workspaceWebhookSecret("s", "a")).not.toBe(workspaceWebhookSecret("s", "b"));
+    expect(workspaceWebhookSecret("", "a")).toBe("");
+  });
+});

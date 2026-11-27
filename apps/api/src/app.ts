@@ -46,6 +46,7 @@ import {
   listProposals,
   actOnProposal,
   verifyGithubSignature,
+  workspaceWebhookSecret,
   wrapInbox,
   workspaceBySlug,
   withWorkspace,
@@ -82,9 +83,17 @@ async function parseBody<S extends z.ZodTypeAny>(c: Context, schema: S): Promise
   } catch {
     throw new HubError("validation_failed", "Body must be valid JSON", 400);
   }
+  if (hasNul(json)) throw new HubError("validation_failed", "Text must not contain NUL characters", 400);
   const r = schema.safeParse(json);
   if (!r.success) throw invalid(r.error);
   return r.data;
+}
+/** BUG-01: Postgres text cannot hold U+0000; reject it as input instead of failing with a 500. */
+function hasNul(v: unknown): boolean {
+  if (typeof v === "string") return v.includes("\u0000");
+  if (Array.isArray(v)) return v.some(hasNul);
+  if (v && typeof v === "object") return Object.entries(v).some(([k, x]) => k.includes("\u0000") || hasNul(x));
+  return false;
 }
 const invalid = (e: ZodError) =>
   new HubError("validation_failed", e.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; "), 400);
@@ -111,6 +120,14 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
       allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     }),
   );
+  // SEC-05: JSON API responses are never sniffed, framed or given a referrer.
+  app.use("*", async (c, next) => {
+    await next();
+    c.header("X-Content-Type-Options", "nosniff");
+    c.header("X-Frame-Options", "DENY");
+    c.header("Referrer-Policy", "no-referrer");
+    if (!c.res.headers.get("content-security-policy")) c.header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
+  });
   app.use("*", bodyLimit({ maxSize: 512 * 1024, onError: (c) => c.json({ error: { code: "validation_failed", message: "Body too large" } }, 400) }));
 
   app.onError((err, c) => {
@@ -426,6 +443,19 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
   app.get("/w/:slug/tasks/:id/handoff", async (c) => c.json(await buildHandoff(H(c), uuidParam(c, "id"))));
   app.get("/w/:slug/audit", async (c) => c.json(await listAudit(H(c))));
 
+  /** SEC-08: what to paste into GitHub → Settings → Webhooks. Admin only; the secret is specific to this workspace. */
+  app.get("/w/:slug/connectors/github", async (c) => {
+    const h = H(c);
+    if (h.role !== "admin") throw new HubError("forbidden", "Only the orchestrator can read the webhook secret", 403);
+    if (!config.githubWebhookSecret) throw new HubError("validation_failed", "GITHUB_WEBHOOK_SECRET is not set on the server", 400);
+    await auditStandalone(h.workspaceId, { kind: "human", memberId: h.memberId }, { action: "connector.github.setup", via: "web" }).catch(() => {});
+    return c.json({
+      payloadUrl: `${new URL(c.req.url).origin}/hooks/github/${h.workspaceId}`,
+      secret: workspaceWebhookSecret(config.githubWebhookSecret, h.workspaceId),
+      events: ["pull_request", "issues", "check_suite", "workflow_run", "deployment_status"],
+    });
+  });
+
   /* ---------------- /agent/* (bearer agent token ONLY) ---------------- */
   app.use("/agent/*", async (c, next) => {
     const t = bearer(c.req.header("authorization"));
@@ -462,7 +492,8 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
     if (!wsId.success) throw new HubError("not_found", "Not found", 404);
     if (!config.githubWebhookSecret) throw new HubError("internal", "GITHUB_WEBHOOK_SECRET is not set", 500);
     const raw = await c.req.text();
-    if (!verifyGithubSignature(config.githubWebhookSecret, raw, c.req.header("x-hub-signature-256"))) {
+    // SEC-08: each workspace has its own secret, derived from the server secret, so one signature never fits two workspaces.
+    if (!verifyGithubSignature(workspaceWebhookSecret(config.githubWebhookSecret, wsId.data), raw, c.req.header("x-hub-signature-256"))) {
       await auditStandalone(wsId.data, { kind: "webhook" }, { action: "webhook.github", outcome: "bad_signature" }).catch(() => {});
       throw new HubError("bad_signature", "Signature mismatch", 401);
     }

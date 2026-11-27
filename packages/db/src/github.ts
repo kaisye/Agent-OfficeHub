@@ -4,6 +4,23 @@ import type { EventType } from "@officehub/shared";
 import type { Tx } from "./client.js";
 import { withWorkspace } from "./client.js";
 import { audit, emitEvent } from "./core.js";
+import { scanFields } from "./secrets.js";
+
+/** SEC-08: per-workspace webhook secret = HMAC-SHA256(key=server secret, msg=workspaceId), hex. Empty server secret -> "". */
+export function workspaceWebhookSecret(serverSecret: string, workspaceId: string): string {
+  return serverSecret ? createHmac("sha256", serverSecret).update(workspaceId).digest("hex") : "";
+}
+
+/** SEC-09: only http(s) links are kept from external payloads. */
+export function safeUrl(u: unknown): string | null {
+  if (typeof u !== "string") return null;
+  try {
+    const x = new URL(u);
+    return x.protocol === "https:" || x.protocol === "http:" ? x.toString() : null;
+  } catch {
+    return null;
+  }
+}
 
 export function verifyGithubSignature(secret: string, rawBody: string, header: string | undefined | null): boolean {
   if (!secret || !header?.startsWith("sha256=")) return false;
@@ -26,13 +43,14 @@ interface Mapped {
 }
 
 export function mapGithubEvent(name: string, p: Payload): Mapped | null {
+  if (!p || typeof p !== "object" || Array.isArray(p)) return null; // BUG-02: e.g. a signed JSON `null`
   const action = p.action as string | undefined;
   if (name === "pull_request" && p.pull_request) {
     const pr = p.pull_request;
     const task = {
       source: "github_pr" as const,
       key: `#${pr.number}`,
-      url: pr.html_url ?? null,
+      url: safeUrl(pr.html_url),
       title: String(pr.title ?? `PR #${pr.number}`).slice(0, 300),
       assigneeLogin: pr.assignee?.login ?? pr.user?.login ?? null,
         branch: pr.head?.ref ?? null,
@@ -66,7 +84,7 @@ export function mapGithubEvent(name: string, p: Payload): Mapped | null {
       task: {
         source: "github_issue",
         key: `#${i.number}`,
-        url: i.html_url ?? null,
+        url: safeUrl(i.html_url),
         title: String(i.title ?? `Issue #${i.number}`).slice(0, 300),
         state: closed ? "closed" : "open",
         assigneeLogin: i.assignee?.login ?? null,
@@ -108,6 +126,14 @@ export async function ingestGithub(
 ): Promise<{ status: "ignored" | "duplicate" | "ingested"; eventId?: string }> {
   const m = mapGithubEvent(eventName, payload);
   return withWorkspace(workspaceId, async (tx) => {
+    // BUG-03 / rule 4: text from GitHub is scanned like anything else; a hit stores nothing (GitHub still gets 200).
+    const hit = m
+      ? scanFields({ title: m.task?.title, branch: m.task?.branch ?? null, ...Object.fromEntries(Object.entries(m.data).map(([k, v]) => [k, typeof v === "string" ? v : null])) })
+      : null;
+    if (hit) {
+      await audit(tx, workspaceId, { kind: "webhook" }, { action: "webhook.github", outcome: "rejected", meta: { code: "secret_detected", event: eventName, rule: hit.rule, field: hit.field, source: "github" } });
+      return { status: "ignored" as const };
+    }
     if (!m) {
       await audit(tx, workspaceId, { kind: "webhook" }, { action: "webhook.github", outcome: "ignored", meta: { event: eventName } });
       return { status: "ignored" as const };

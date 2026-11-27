@@ -319,7 +319,9 @@ describe("agent tokens vs human routes (rules 3, 5)", () => {
 });
 
 describe("GitHub webhook", () => {
-  const sig = (body: string, secret = SECRET) => "sha256=" + createHmac("sha256", secret).update(body).digest("hex");
+  /** SEC-08: GitHub signs with the per-workspace secret derived from the server secret. */
+  const wsSecret = (wsId: string) => createHmac("sha256", SECRET).update(wsId).digest("hex");
+  const sig = (body: string, secret: string) => "sha256=" + createHmac("sha256", secret).update(body).digest("hex");
   const prPayload = { action: "opened", number: 7, pull_request: { number: 7, title: "Feat X", html_url: "https://github.com/o/r/pull/7", user: { login: "someone" }, merged: false }, repository: { full_name: "o/r" } };
 
   it("signature mismatch -> 401 bad_signature and nothing is written", async () => {
@@ -339,7 +341,7 @@ describe("GitHub webhook", () => {
     const w = await makeWorkspace("hook");
     const send = (event: string, payload: unknown, delivery: string) => {
       const body = JSON.stringify(payload);
-      return h.app.request(`/hooks/github/${w.id}`, { method: "POST", headers: { "x-hub-signature-256": sig(body), "x-github-event": event, "x-github-delivery": delivery }, body });
+      return h.app.request(`/hooks/github/${w.id}`, { method: "POST", headers: { "x-hub-signature-256": sig(body, wsSecret(w.id)), "x-github-event": event, "x-github-delivery": delivery }, body });
     };
     expect((await send("pull_request", prPayload, "d1")).status).toBe(200);
     expect((await (await send("pull_request", prPayload, "d1")).json()).status).toBe("duplicate");

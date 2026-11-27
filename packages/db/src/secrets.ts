@@ -31,6 +31,12 @@ export const SECRET_RULES: SecretRule[] = [
   { id: "aws-access-key-id", re: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/ },
   { id: "google-api-key", re: /\bAIza[0-9A-Za-z_-]{35}/ },
   { id: "slack-token", re: /\bxox[abpr]-[A-Za-z0-9-]{10,}/ },
+  { id: "stripe-secret-key", re: /\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}/ },
+  { id: "office-hub-agent-token", re: /\boh_agent_[A-Za-z0-9]{20,}/ },
+  { id: "jwt", re: /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/ },
+  // scheme://user:password@host — any URL carrying an inline password (postgres, mysql, mongodb, redis, amqp, http...)
+  { id: "url-with-password", re: /\b[a-z][a-z0-9+.-]{1,20}:\/\/[^\s:/@]+:[^\s:/@]{6,}@[^\s/@]+/i },
+  { id: "bearer-token", re: /\bBearer\s+[A-Za-z0-9._~+/-]{20,}=*/i },
   { id: "private-key-block", re: /-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----/ },
   {
     id: "generic-high-entropy-secret",
@@ -44,7 +50,20 @@ export interface SecretMatch {
   field: string;
 }
 
+/**
+ * SEC-03: normalise before matching so invisible / look-alike characters cannot split a key.
+ * Removes format characters (zero-width space/joiner, BOM, soft hyphen, bidi marks...) and applies NFKC (fullwidth -> ASCII).
+ */
+export function normaliseForScan(text: string): string {
+  return text.normalize("NFKC").replace(/[\p{Cf}\u00AD]/gu, "");
+}
+
 export function scanText(text: string): string | null {
+  const norm = normaliseForScan(text);
+  return scanOne(text) ?? (norm !== text ? scanOne(norm) : null);
+}
+
+function scanOne(text: string): string | null {
   for (const r of SECRET_RULES) {
     const re = new RegExp(r.re.source, r.re.flags.replace("g", ""));
     const m = re.exec(text);

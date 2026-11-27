@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import postgres from "postgres";
+import { HubError } from "./errors.js";
 
 export type Sql = postgres.Sql;
 export type Tx = postgres.TransactionSql;
@@ -74,8 +75,14 @@ export async function listenChannel(channel: string, onNotify: (payload: string)
  */
 export async function withWorkspace<T>(workspaceId: string, fn: (tx: Tx) => Promise<T>, sql: Sql = appSql()): Promise<T> {
   if (!/^[0-9a-f-]{36}$/i.test(workspaceId)) throw new Error("invalid workspace id");
-  return (await sql.begin(async (tx) => {
-    await tx`SELECT set_config('app.workspace_id', ${workspaceId}, true)`;
-    return fn(tx);
-  })) as T;
+  try {
+    return (await sql.begin(async (tx) => {
+      await tx`SELECT set_config('app.workspace_id', ${workspaceId}, true)`;
+      return fn(tx);
+    })) as T;
+  } catch (e) {
+    // BUG-01: 22021 = character not in repertoire (U+0000 in text). It is bad input, not a server fault.
+    if ((e as { code?: string })?.code === "22021") throw new HubError("validation_failed", "Text must not contain NUL characters", 400);
+    throw e;
+  }
 }

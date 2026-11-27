@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
@@ -296,6 +297,13 @@ export interface McpOptions {
 export function createMcpApp(o: McpOptions = {}) {
   const limiter = o.limiter ?? new AgentRateLimiter();
   const app = new Hono();
+  app.use("*", async (c, next) => {
+    await next();
+    c.header("X-Content-Type-Options", "nosniff");
+    c.header("X-Frame-Options", "DENY");
+  });
+  // SEC-07: tool inputs are small (the largest is an 8 KB body); refuse anything big before auth or JSON parsing.
+  app.use("/mcp", bodyLimit({ maxSize: 256 * 1024, onError: () => rpcError(413, "validation_failed", "Body too large") }));
   app.get("/health", (c) => c.json({ ok: true }));
   app.on(["GET", "DELETE"], "/mcp", () => rpcError(405, "internal", "Stateless MCP endpoint: use POST"));
 

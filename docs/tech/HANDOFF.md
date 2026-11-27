@@ -27,7 +27,7 @@ Round 2: built against contract v0.3. Tests: db 47, api 22, mcp 16, agent-hooks 
 | `SESSION_SECRET` | signs the OAuth state cookie | `change-me-dev-only` |
 | `DEV_LOGIN_ENABLED` | enables `POST /auth/dev-login` (must be `true`) | off |
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | OAuth (`/auth/github`, `/auth/github/callback`; register callback `http://localhost:8787/auth/github/callback`) | empty = 500 `internal` |
-| `GITHUB_WEBHOOK_SECRET` | webhook HMAC | empty = webhook returns 500 `internal` |
+| `GITHUB_WEBHOOK_SECRET` | server key for per-workspace webhook secrets (`GET /w/:slug/connectors/github`) | empty = webhook returns 500 `internal` |
 | `AGENT_RATE_PER_MIN`, `AGENT_STATUS_PER_MIN`, `AGENT_DRAFTS_PER_HOUR` | rate limits | 60, 6, 20 |
 | `OFFICEHUB_AGENT_TOKEN`, `OFFICEHUB_API_URL` | hook CLI | -, `http://localhost:8787` |
 

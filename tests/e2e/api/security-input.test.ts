@@ -109,15 +109,15 @@ describe("size and robustness", () => {
     expect([400, 413]).toContain(r.status);
     expect((await raw("GET", "/health")).status).toBe(200);
   });
-  known("BUG-01", "a NUL character in text must be a 400 validation error, not an unhandled 500 (Postgres 22021)", async () => {
+  it("[BUG-01] a NUL character in text must be a 400 validation error, not an unhandled 500 (Postgres 22021)", async () => {
     const r = await api(w.orch, "POST", W(w, "/requests"), mk({ title: "QA-E2E a\u0000b" }));
     expect(r.status).toBe(400);
   });
-  known("BUG-01", "NUL in a role status line / decision is a 400 as well", async () => {
+  it("[BUG-01] NUL in a role status line / decision is a 400 as well", async () => {
     expect((await roleStatus(w, "qa", { doing: "a\u0000b" })).status).toBe(400);
     expect((await api(w.orch, "POST", W(w, "/decisions"), { title: "QA-E2E d\u0000", body: "", rationale: "r", taskId: null })).status).toBe(400);
   });
-  known("SEC-07", "MCP endpoint enforces a request body limit (5MB JSON-RPC body is accepted today)", async () => {
+  it("[SEC-07] MCP endpoint enforces a request body limit (5MB JSON-RPC body is accepted today)", async () => {
     const a = await createAgent(w, "qa");
     const r = await raw(
       "POST",

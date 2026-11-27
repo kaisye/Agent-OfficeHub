@@ -53,3 +53,20 @@ pnpm --filter @officehub/e2e test:ui
 OH_QA_STRICT=1 pnpm --filter @officehub/e2e test:api   # chạy 19 test lỗi đang mở như test thường
 ```
 Khi một test `known(...)` bắt đầu qua, đổi nó thành `it(...)`.
+
+## Cập nhật 2026-11-27 (v0.6): đã đóng các lỗi đã biết
+
+| Mã | Sửa |
+|---|---|
+| SEC-03 | Bộ quét chuẩn hoá NFKC và bỏ ký tự định dạng (zero-width, soft hyphen) trước khi so khớp |
+| SEC-04 | Thêm luật: Stripe `sk_live_`/`rk_`, JWT, token `oh_agent_`, URL có mật khẩu, `Bearer <token>` |
+| SEC-05 | API và MCP gửi `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, CSP `frame-ancestors 'none'`; web đã có CSP |
+| SEC-06 | API từ chối khởi động khi `NODE_ENV=production` mà bật dev login hoặc `SESSION_SECRET` mặc định/ngắn |
+| SEC-07 | MCP giới hạn body 256 KB (413) trước khi xác thực |
+| SEC-08 | Secret webhook riêng cho từng workspace (HMAC của secret máy chủ và workspace id); `GET /w/:slug/connectors/github` |
+| SEC-09 | Chỉ giữ link `http(s)` từ GitHub |
+| SEC-10 | Gói bàn giao ép mọi đoạn chữ về một dòng |
+| SEC-11 | Phía hỏi vẫn thấy `sent` khi phía nhận mới có nháp trả lời |
+| BUG-01 | Ký tự NUL → 400 `validation_failed` (cả lỗi 22021 từ Postgres) |
+| BUG-02 | Payload webhook `null` bị bỏ qua |
+| BUG-03 | Tiêu đề PR/branch chứa key: không tạo Việc, audit `rejected` + `secret_detected` |
