@@ -17,6 +17,8 @@
     "db:migrate": "pnpm --filter @officehub/db migrate",
     "db:seed": "pnpm --filter @officehub/db seed",
     "db:invite": "pnpm --filter @officehub/db invite",
+    "db:seed:marketing": "pnpm --filter @officehub/db seed:marketing",
+    "runner": "pnpm --filter @officehub/agent-runner start",
     "dev:api": "pnpm --filter @officehub/api dev",
     "dev:mcp": "pnpm --filter @officehub/mcp dev",
     "e2e": "pnpm --filter @officehub/e2e e2e",

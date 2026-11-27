@@ -63,6 +63,31 @@ if printf '%s' "$SEED_OUT" | grep -q '^seeded workspace'; then
   echo "seeded: role ids + one agent token per role in ~/.officehub-seed.txt (shown once)"
   echo "sign-in link for the orchestrator:"; pnpm --silent db:invite
 fi
+# Marketing workspace + agent runner config (first run only; tokens and the sign-in link are written once, chmod 600).
+RUNNER_CFG="$HOME/.config/officehub/runner.json"
+if [ ! -f "$RUNNER_CFG" ]; then
+  MKT_OUT=$(pnpm --silent db:seed:marketing)
+  TOKENS=$(printf '%s\n' "$MKT_OUT" | sed -n 's/^RUNNER_TOKENS=//p')
+  if [ -n "$TOKENS" ]; then
+    mkdir -p "$(dirname "$RUNNER_CFG")" "$HOME/agents/marketing/knowledge"
+    (umask 077; cat > "$RUNNER_CFG" <<EOF
+{
+  "mcpUrl": "http://127.0.0.1:8788/mcp",
+  "model": "deepseek/deepseek-v4.1-flash-1017",
+  "tokens": $TOKENS,
+  "apiKeyFile": "~/.config/vietnote/openrouter.env",
+  "knowledgeDir": "~/agents/marketing/knowledge",
+  "artifactsDir": "~/agents/marketing/an-pham",
+  "stateDir": "~/agents/marketing/state",
+  "pollSeconds": 20,
+  "dailyBudgetUsd": 2
+}
+EOF
+    printf '%s\n' "$MKT_OUT" | sed -n 's/^INVITE=//p' > "$HOME/.officehub-marketing-invite.txt")
+    echo "marketing workspace seeded: runner config in $RUNNER_CFG, sign-in link in ~/.officehub-marketing-invite.txt"
+  fi
+fi
+
 export NEXT_PUBLIC_API_MODE=http NEXT_PUBLIC_API_URL="http://${HOST}:8787" NEXT_PUBLIC_MCP_URL="http://${HOST}:8788/mcp"
 pnpm --filter @officehub/web build
 
@@ -93,9 +118,19 @@ EOF
 unit api "API (:8787)" "$HOME/.local/bin/pnpm --filter @officehub/api start"
 unit mcp "MCP (:8788)" "$HOME/.local/bin/pnpm --filter @officehub/mcp start"
 unit web "web (:3000)" "$HOME/.local/bin/pnpm --filter @officehub/web start"
+unit runner "agent runner (marketing team)" "$HOME/.local/bin/pnpm --filter @officehub/agent-runner start"
 systemctl --user daemon-reload
 systemctl --user enable officehub-api officehub-mcp officehub-web >/dev/null
 systemctl --user restart officehub-api officehub-mcp officehub-web
+# The runner needs its config and the model API key; without them it stays off.
+if [ -f "$RUNNER_CFG" ] && [ -f "$HOME/.config/vietnote/openrouter.env" ]; then
+  systemctl --user enable officehub-runner >/dev/null
+  systemctl --user restart officehub-runner
+  echo "agent runner: on (journalctl --user -u officehub-runner -f)"
+else
+  systemctl --user disable --now officehub-runner >/dev/null 2>&1 || true
+  echo "agent runner: off (needs $RUNNER_CFG and ~/.config/vietnote/openrouter.env)"
+fi
 
 echo
 echo "Office Hub: http://${HOST}:3000   (API :8787, MCP http://${HOST}:8788/mcp)"
