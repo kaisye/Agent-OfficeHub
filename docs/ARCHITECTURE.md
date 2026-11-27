@@ -1,6 +1,7 @@
 # Office Hub — Architecture & team ownership (Leader)
 
-Read `docs/proposal.md` first. The domain contract lives in `packages/shared` (zod + TS). It is the single
+Read `docs/redesign-orchestrator.md` first (v0.6: ONE human orchestrator, each team below is an AGENT holding a role),
+then `docs/proposal.md`. The domain contract lives in `packages/shared` (zod + TS). It is the single
 source of truth for shapes, the request state machine (`canTransition`), API routes (`Routes`) and MCP tool
 names (`McpTools`). **Only the Leader edits `packages/shared`.** If you need a change, write it in your
 team's `HANDOFF.md` under "Contract change requests" and code against the current contract meanwhile.
@@ -23,6 +24,10 @@ team's `HANDOFF.md` under "Contract change requests" and code against the curren
 | Tests | vitest everywhere; API integration tests hit the docker Postgres | — |
 
 ## Directory ownership (do not write outside yours)
+Since v0.6 these teams are **roles held by agents** (seeded from `DEFAULT_ROLES` in `packages/shared/src/roles.ts`;
+the orchestrator can edit owned paths in the web app). Agents check ownership with the `check_paths` MCP tool; a
+contract change is a `contract_change` request to the Leader role instead of a HANDOFF entry. `deploy/**` belongs to Backend.
+
 | Team | Owns |
 |---|---|
 | Leader | `packages/shared/**`, root config files, `docs/ARCHITECTURE.md`, `docs/proposal.md` |

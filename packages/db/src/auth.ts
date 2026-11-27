@@ -39,7 +39,7 @@ export async function authenticateAgent(token: string): Promise<AgentAuth> {
   await withWorkspace(a.workspace_id, (tx) => tx`UPDATE agents SET last_seen_at = now() WHERE id = ${a.id}`);
   return {
     ok: true,
-    principal: { kind: "agent", workspaceId: a.workspace_id, agentId: a.id, ownerId: a.owner_id, scopes: a.scopes as AgentScope[] },
+    principal: { kind: "agent", workspaceId: a.workspace_id, agentId: a.id, ownerId: a.owner_id, roleId: a.role_id, scopes: a.scopes as AgentScope[] },
   };
 }
 

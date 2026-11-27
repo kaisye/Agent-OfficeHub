@@ -2,21 +2,26 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Badge, Dialog, Drawer, Icon, Mascot, cn, relativeTimeVi, requestDirectionLabel, type IconName } from "@officehub/ui";
+import { Badge, Button, Dialog, Drawer, Icon, Mascot, cn, relativeTimeVi, useToast, type IconName } from "@officehub/ui";
+import { Password } from "@officehub/shared";
 import { getApi } from "@/lib/api";
-import { useBoard, useDecisions, useInbox, useRequests } from "@/lib/hooks";
-import { memberMap, needsMe } from "@/lib/requests";
+import { errorMessage } from "@/lib/errors";
+import { useBoard, useDecisions, useQueue, useRequests } from "@/lib/hooks";
+import { directionLabel, queueCount, roleMap } from "@/lib/requests";
+import { useStableCallback } from "@/lib/use-stable";
+import { Field, TextInput } from "./form";
+import { KindChip } from "./parties";
 import { useWorkspace } from "./workspace";
 
 const LINKS: { href: string; label: string; icon: IconName; exact?: boolean; badge?: boolean }[] = [
-  { href: "", label: "Văn phòng", icon: "office", exact: true },
-  { href: "/requests", label: "Yêu cầu", icon: "request", badge: true },
+  { href: "", label: "Chờ duyệt", icon: "shield", exact: true, badge: true },
+  { href: "/office", label: "Văn phòng", icon: "office" },
+  { href: "/requests", label: "Yêu cầu", icon: "request" },
   { href: "/decisions", label: "Quyết định", icon: "decision" },
+  { href: "/agents", label: "Agent", icon: "bot" },
   { href: "/assistant", label: "Hỏi trợ lý", icon: "quote" },
-  { href: "/agents", label: "Agent của tôi", icon: "bot" },
-  { href: "/me/mascot", label: "Mascot của bạn", icon: "smile" },
 ];
 
 /** Desk Buddies leaf mark (two leaves on a Forest tile). */
@@ -37,9 +42,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const base = `/w/${slug}`;
   const pathname = usePathname();
   const board = useBoard(slug);
-  const inbox = useInbox(slug);
-  const { me } = useWorkspace();
-  const mine = needsMe(inbox.data, board.data, me.id);
+  const queue = useQueue(slug);
+  const n = queueCount(queue.data);
   const [searchOpen, setSearchOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
 
@@ -56,7 +60,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, []);
 
   const current = LINKS.find((l) => isActive(pathname, base + l.href, l.exact));
-  const crumb = current?.label ?? (pathname.includes("/tasks/") ? "Bàn giao" : "");
+  const crumb = current?.label ?? (pathname.includes("/tasks/") ? "Bàn giao" : pathname.includes("/me/") ? "Mascot của bạn" : "");
 
   return (
     <div>
@@ -64,7 +68,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         Bỏ qua điều hướng
       </a>
       <aside className="oh-sidebar" aria-label="Thanh bên">
-        <Link href={base} aria-label="Office Hub, về Văn phòng" className="flex items-center gap-2.5 rounded-oh-md px-2.5 focus-visible:outline-3 focus-visible:outline-oh-focus">
+        <Link href={base} aria-label="Office Hub, về Chờ duyệt" className="flex items-center gap-2.5 rounded-oh-md px-2.5 focus-visible:outline-3 focus-visible:outline-oh-focus">
           <LeafMark />
           <span className="oh-hide-sm text-oh-xl font-bold leading-tight tracking-tight">
             office hub
@@ -78,19 +82,20 @@ export function AppShell({ children }: { children: ReactNode }) {
           </span>
           <span className="min-w-0">
             <b className="block truncate text-oh-sm">{board.data?.workspace.name ?? "Office Hub"}</b>
-            <small className="block text-oh-xs text-oh-ink-muted">Không gian của nhóm</small>
+            <small className="block text-oh-xs text-oh-ink-muted">{board.data ? `${board.data.roles.length} vai trò · 1 điều phối` : "Đang tải…"}</small>
           </span>
         </div>
 
         <nav aria-label="Điều hướng chính" className="mt-7 grid gap-1.5 sm:mt-0">
           {LINKS.map((l) => (
-            <Link key={l.href} href={base + l.href} aria-current={isActive(pathname, base + l.href, l.exact) ? "page" : undefined} aria-label={l.label} title={l.label} className="oh-nav-link focus-visible:outline-3 focus-visible:outline-oh-focus">
+            <Link key={l.href} href={base + l.href} aria-current={isActive(pathname, base + l.href, l.exact) ? "page" : undefined} aria-label={l.badge && n ? `${l.label}, ${n} việc` : l.label} title={l.label} className="oh-nav-link relative focus-visible:outline-3 focus-visible:outline-oh-focus">
               <Icon name={l.icon} size={19} />
               <span className="oh-hide-sm">{l.label}</span>
-              {l.badge && mine.length > 0 && (
-                <Badge tone="human" className="oh-hide-sm ml-auto" aria-label={`${mine.length} yêu cầu cần bạn xử lý`}>
-                  {mine.length}
-                </Badge>
+              {l.badge && n > 0 && (
+                <>
+                  <Badge tone="human" className="oh-hide-sm ml-auto">{n}</Badge>
+                  <span aria-hidden="true" className="oh-show-sm absolute right-1 top-1 size-2 rounded-oh-full" style={{ background: "var(--oh-brand-cognac)" }} />
+                </>
               )}
             </Link>
           ))}
@@ -114,9 +119,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span className="hidden sm:inline">Tìm nhanh</span>
               <kbd className="ml-1 hidden rounded-[4px] border border-oh-border px-1 text-[11px] sm:inline">⌘K</kbd>
             </button>
-            <button type="button" onClick={() => setBellOpen(true)} className="relative rounded-oh-md p-2 text-oh-ink-muted hover:bg-oh-surface-2 focus-visible:outline-3 focus-visible:outline-oh-focus" aria-label={mine.length > 0 ? `Hộp thư: ${mine.length} việc cần bạn` : "Hộp thư: trống"}>
+            <button type="button" onClick={() => setBellOpen(true)} className="relative rounded-oh-md p-2 text-oh-ink-muted hover:bg-oh-surface-2 focus-visible:outline-3 focus-visible:outline-oh-focus" aria-label={n > 0 ? `Chờ duyệt: ${n} việc` : "Chờ duyệt: trống"}>
               <Icon name="bell" size={20} />
-              {mine.length > 0 && <span aria-hidden="true" className="absolute right-1.5 top-1 grid min-w-4 place-items-center rounded-oh-full border border-oh-surface px-1 text-[10px] font-bold leading-4 text-white" style={{ background: "var(--oh-brand-cognac)" }}>{mine.length}</span>}
+              {n > 0 && <span aria-hidden="true" className="absolute right-1.5 top-1 grid min-w-4 place-items-center rounded-oh-full border border-oh-surface px-1 text-[10px] font-bold leading-4 text-white" style={{ background: "var(--oh-brand-cognac)" }}>{n}</span>}
             </button>
           </div>
         </header>
@@ -126,7 +131,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
 
       <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} />
-      <NotificationDrawer open={bellOpen} onClose={() => setBellOpen(false)} />
+      <QueueDrawer open={bellOpen} onClose={() => setBellOpen(false)} />
     </div>
   );
 }
@@ -134,12 +139,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 /* ---------- self block + account menu ---------- */
 function SelfMenu({ base }: { base: string }) {
   const { me } = useWorkspace();
-  const board = useBoard(me.workspaceSlug);
   const [open, setOpen] = useState(false);
+  const [pw, setPw] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const qc = useQueryClient();
-  const presence = board.data?.cards.find((c) => c.memberId === me.id)?.presence ?? "offline";
 
   useEffect(() => {
     if (!open) return;
@@ -162,17 +166,23 @@ function SelfMenu({ base }: { base: string }) {
   return (
     <div ref={ref} className="relative border-t border-oh-border pt-4">
       <button type="button" aria-haspopup="menu" aria-expanded={open} aria-label={`Menu của ${me.displayName}`} onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-2.5 rounded-oh-md text-left focus-visible:outline-3 focus-visible:outline-oh-focus max-[760px]:justify-center">
-        <Mascot mascot={me.mascot} presence={presence} size={32} title={me.displayName} />
+        <Mascot mascot={me.mascot} mood="curious" size={32} title={me.displayName} />
         <span className="oh-hide-sm min-w-0 flex-1">
           <b className="block truncate text-oh-sm">{me.displayName}</b>
-          <small className="block text-oh-xs text-oh-ink-muted">{me.role === "admin" ? "Quản trị" : "Thành viên"}</small>
+          <small className="block text-oh-xs text-oh-ink-muted">Người điều phối</small>
         </span>
       </button>
       {open && (
-        <div role="menu" aria-label="Tài khoản" className="absolute bottom-full left-0 mb-2 w-60 rounded-oh-lg border border-oh-border bg-oh-surface p-1.5 shadow-oh-lg">
-          <p className="px-3 py-2 text-oh-xs text-oh-ink-muted">{me.displayName} · {me.role === "admin" ? "Quản trị" : "Thành viên"}</p>
-          <Link role="menuitem" href={`${base}/me/mascot`} className={item} onClick={() => setOpen(false)}>Mascot của bạn</Link>
-          <Link role="menuitem" href={`${base}/agents`} className={item} onClick={() => setOpen(false)}>Agent của tôi</Link>
+        <div role="menu" aria-label="Tài khoản" className="absolute bottom-full left-0 z-30 mb-2 w-60 rounded-oh-lg border border-oh-border bg-oh-surface p-1.5 shadow-oh-lg">
+          <p className="px-3 py-2 text-oh-xs text-oh-ink-muted">{me.displayName} · người điều phối</p>
+          <Link role="menuitem" href={`${base}/me/mascot`} className={item} onClick={() => setOpen(false)}>
+            <Icon name="smile" size={16} />
+            Mascot của bạn
+          </Link>
+          <button role="menuitem" type="button" className={item} onClick={() => { setOpen(false); setPw(true); }}>
+            <Icon name="key" size={16} />
+            Đổi mật khẩu
+          </button>
           <ThemeToggle className={item} />
           <button role="menuitem" type="button" className={item} onClick={logout}>
             <Icon name="logout" size={16} />
@@ -180,7 +190,61 @@ function SelfMenu({ base }: { base: string }) {
           </button>
         </div>
       )}
+      <ChangePasswordDialog open={pw} onClose={() => setPw(false)} />
     </div>
+  );
+}
+
+function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { slug } = useWorkspace();
+  const toast = useToast();
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const close = useStableCallback(() => {
+    setCurrent("");
+    setNext("");
+    setError(null);
+    onClose();
+  });
+  const check = Password.password.safeParse(next);
+  const submit = async (e?: FormEvent) => {
+    e?.preventDefault();
+    if (!current || !check.success) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await getApi().changePassword(slug, { current, next });
+      toast("Đã đổi mật khẩu. Các phiên khác đã đăng xuất.", "success");
+      close();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog
+      open={open}
+      onClose={close}
+      title="Đổi mật khẩu"
+      description="Các phiên đăng nhập khác sẽ bị đăng xuất."
+      footer={
+        <>
+          <Button variant="ghost" onClick={close}>Để sau</Button>
+          <Button variant="primary" loading={busy} disabled={!current || !check.success} onClick={() => void submit()}>Đổi mật khẩu</Button>
+        </>
+      }
+    >
+      <form onSubmit={submit} className="space-y-4">
+        <Field label="Mật khẩu hiện tại">{(id) => <TextInput id={id} type="password" autoComplete="current-password" data-autofocus value={current} onChange={(e) => setCurrent(e.target.value)} />}</Field>
+        <Field label="Mật khẩu mới" hint="Ít nhất 10 ký tự." error={error}>
+          {(id, d) => <TextInput id={id} type="password" autoComplete="new-password" aria-describedby={d} value={next} onChange={(e) => setNext(e.target.value)} />}
+        </Field>
+        <button type="submit" className="sr-only" tabIndex={-1}>Đổi mật khẩu</button>
+      </form>
+    </Dialog>
   );
 }
 
@@ -203,6 +267,7 @@ function ThemeToggle({ className }: { className?: string }) {
   };
   return (
     <button role="menuitem" type="button" className={className} onClick={next}>
+      <Icon name="leaf" size={16} />
       Đổi giao diện sáng / tối
     </button>
   );
@@ -211,7 +276,7 @@ function ThemeToggle({ className }: { className?: string }) {
 /* ---------- Tìm nhanh (Cmd/Ctrl+K) ---------- */
 interface Hit {
   key: string;
-  kind: "Thành viên" | "Yêu cầu" | "Quyết định";
+  kind: "Vai trò" | "Yêu cầu" | "Quyết định";
   title: string;
   sub: string;
   href: string;
@@ -232,23 +297,25 @@ function SearchDialog({ open, onClose }: { open: boolean; onClose: () => void })
   }, [open]);
 
   const all = useMemo<Hit[]>(() => {
-    const members = (board.data?.members ?? []).map((m): Hit => ({ key: `m-${m.id}`, kind: "Thành viên", title: m.displayName, sub: m.areas.join(", ") || "Thành viên", href: `/w/${slug}?member=${m.id}`, mascot: m.mascot }));
-    const reqs = (requests.data ?? []).map((r): Hit => ({ key: `r-${r.id}`, kind: "Yêu cầu", title: r.title, sub: r.status, href: `/w/${slug}/requests?open=${r.id}` }));
+    const roles = board.data?.roles ?? [];
+    const map = roleMap(roles);
+    const rs = roles.map((r): Hit => ({ key: `ro-${r.id}`, kind: "Vai trò", title: r.name, sub: `${r.mission} ${r.ownedPaths.join(" ")}`, href: `/w/${slug}/office?role=${r.id}`, mascot: r.mascot }));
+    const reqs = (requests.data ?? []).map((r): Hit => ({ key: `r-${r.id}`, kind: "Yêu cầu", title: r.title, sub: directionLabel(r, map), href: `/w/${slug}/requests/${r.id}` }));
     const decs = (decisions.data ?? []).map((d): Hit => ({ key: `d-${d.id}`, kind: "Quyết định", title: d.title, sub: d.rationale ?? "", href: `/w/${slug}/decisions` }));
-    return [...members, ...reqs, ...decs];
+    return [...rs, ...reqs, ...decs];
   }, [board.data, requests.data, decisions.data, slug]);
   const needle = fold(q.trim());
-  const hits = (needle ? all.filter((h) => fold(`${h.title} ${h.sub}`).includes(needle)) : all.filter((h) => h.kind === "Thành viên")).slice(0, 12);
+  const hits = (needle ? all.filter((h) => fold(`${h.title} ${h.sub}`).includes(needle)) : all.filter((h) => h.kind === "Vai trò")).slice(0, 12);
 
   const go = (h: Hit) => {
     onClose();
     router.push(h.href);
   };
   return (
-    <Dialog open={open} onClose={onClose} title="Tìm nhanh" description="Thành viên, yêu cầu, quyết định.">
+    <Dialog open={open} onClose={onClose} title="Tìm nhanh" description="Vai trò, yêu cầu, quyết định. Gõ cả đường dẫn để biết file thuộc vùng ai.">
       <input
         data-autofocus
-        aria-label="Tìm thành viên, yêu cầu, quyết định"
+        aria-label="Tìm vai trò, yêu cầu, quyết định"
         value={q}
         onChange={(e) => setQ(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && hits[0] && go(hits[0])}
@@ -275,49 +342,52 @@ function SearchDialog({ open, onClose }: { open: boolean; onClose: () => void })
   );
 }
 
-/* ---------- Hộp thư (chuông) ---------- */
-function NotificationDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { slug, me } = useWorkspace();
+/* ---------- Chuông: tóm tắt hàng chờ ---------- */
+function QueueDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { slug } = useWorkspace();
   const board = useBoard(slug);
-  const inbox = useInbox(slug);
+  const queue = useQueue(slug);
   const router = useRouter();
-  const map = memberMap(board.data?.members ?? []);
-  const items = needsMe(inbox.data, board.data, me.id);
+  const roles = roleMap(board.data?.roles ?? []);
+  const items = queue.data?.requests ?? [];
+  const props = queue.data?.proposals ?? [];
+  const go = (href: string) => {
+    onClose();
+    router.push(href);
+  };
   return (
-    <Drawer open={open} onClose={onClose} title="Hộp thư" description="Việc đang chờ bạn. Agent chỉ soạn nháp; bạn là người bấm gửi.">
-      {items.length === 0 ? (
-        <p className="py-8 text-center text-oh-sm text-oh-ink-muted">Hộp thư trống. Không ai đang chờ bạn.</p>
+    <Drawer open={open} onClose={onClose} title="Chờ duyệt" description="Agent chỉ soạn nháp. Không gì đi qua lại khi bạn chưa bấm.">
+      {items.length + props.length === 0 ? (
+        <p className="py-8 text-center text-oh-sm text-oh-ink-muted">Không có gì chờ bạn.</p>
       ) : (
         <ul>
-          {items.map((r) => {
-            const asker = map.get(r.askerId);
-            const receiver = map.get(r.receiverId);
-            const other = r.askerId === me.id ? receiver : asker;
-            return (
-              <li key={r.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    router.push(`/w/${slug}/requests?open=${r.id}`);
-                  }}
-                  className={cn("flex w-full items-center gap-3 border-b border-oh-border py-4 text-left hover:bg-oh-surface-2 focus-visible:outline-3 focus-visible:outline-oh-focus")}
-                >
-                  {other && <Mascot mascot={other.mascot} size={32} noBadge decorative />}
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-oh-sm font-semibold">{r.title}</span>
-                    <small className="block text-oh-xs text-oh-ink-muted">
-                      {requestDirectionLabel(r, me.id, asker?.displayName ?? "", receiver?.displayName ?? "")} · {relativeTimeVi(r.updatedAt)}
-                    </small>
-                  </span>
-                  {r.unreadForViewer && <span role="img" aria-label="Chưa đọc" className="size-2.5 shrink-0 rounded-oh-full bg-oh-primary" />}
-                </button>
-              </li>
-            );
-          })}
+          {items.map((r) => (
+            <li key={r.id}>
+              <button type="button" onClick={() => go(`/w/${slug}#req-${r.id}`)} className={cn("flex w-full items-center gap-3 border-b border-oh-border py-3.5 text-left hover:bg-oh-surface-2 focus-visible:outline-3 focus-visible:outline-oh-focus")}>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-oh-sm font-semibold">{r.title}</span>
+                  <small className="flex flex-wrap items-center gap-1.5 text-oh-xs text-oh-ink-muted">
+                    {directionLabel(r, roles)} · {relativeTimeVi(r.updatedAt)}
+                  </small>
+                </span>
+                <KindChip kind={r.kind} />
+                {r.unreadForViewer && <span role="img" aria-label="Mới" className="size-2.5 shrink-0 rounded-oh-full bg-oh-primary" />}
+              </button>
+            </li>
+          ))}
+          {props.map((p) => (
+            <li key={p.id}>
+              <button type="button" onClick={() => go(`/w/${slug}#q-proposals`)} className="flex w-full items-center gap-3 border-b border-oh-border py-3.5 text-left hover:bg-oh-surface-2 focus-visible:outline-3 focus-visible:outline-oh-focus">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-oh-sm font-semibold">{p.title}</span>
+                  <small className="text-oh-xs text-oh-ink-muted">{roles.get(p.roleId)?.name ?? "Agent"} đề xuất · {relativeTimeVi(p.createdAt)}</small>
+                </span>
+                <Badge tone="agent" icon="decision">Đề xuất</Badge>
+              </button>
+            </li>
+          ))}
         </ul>
       )}
     </Drawer>
   );
 }
-

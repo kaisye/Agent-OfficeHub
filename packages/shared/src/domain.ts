@@ -1,7 +1,7 @@
 /**
- * Office Hub — domain contract (owned by the Leader).
- * Every team builds against these shapes. Change only via the Leader.
- * Source: "Văn phòng ảo cho nhóm người và agent" proposal, 2026-11-09.
+ * Office Hub — domain contract (owned by the Leader role).
+ * v0.6 (2026-11-27): ONE human orchestrator coordinates several agents, each holding a Role
+ * (see docs/redesign-orchestrator.md). Every role builds against these shapes. Change only via the Leader.
  */
 import { z } from "zod";
 
@@ -55,16 +55,36 @@ export const Member = z.object({
 });
 export type Member = z.infer<typeof Member>;
 
-/** The member's card on the board. Written by the member or their agent (post_status, self only). */
+/* ---------- Role (v0.6) — a seat on the board held by agents ---------- */
+/** Stable role keys. The orchestrator is the human, never a role. */
+export const RoleKey = z.string().regex(/^[a-z][a-z0-9-]{1,30}$/);
+export const Role = z.object({
+  id: Id,
+  workspaceId: Id,
+  key: RoleKey, // "leader", "backend"...
+  name: z.string().min(1).max(60), // "Backend"
+  /** What this role does, shown on the board and returned to its agents. */
+  mission: z.string().max(500),
+  /** Repo paths this role may write (globs: `*` = one segment, `**` = any depth). */
+  ownedPaths: z.array(z.string().min(1).max(200)).max(50),
+  handoffPath: z.string().max(200).nullable(), // e.g. "docs/tech/HANDOFF.md"
+  wave: z.number().int().min(0).max(9), // build order: 0 first
+  mascot: Mascot,
+});
+export type Role = z.infer<typeof Role>;
+
+/** The role's card on the board. Written by any agent holding the role (post_status) or by the orchestrator. */
 export const StatusCard = z.object({
-  memberId: Id,
+  roleId: Id,
   presence: PresenceState,
   doing: z.string().max(280).nullable(), // "đang làm gì"
   branch: z.string().max(200).nullable(),
-  waitingOn: z.array(Id), // member ids
+  /** Files the role is touching right now — used for overlap / out-of-area warnings. */
+  paths: z.array(z.string().max(200)).max(50),
+  waitingOn: z.array(Id), // role ids
   updatedAt: IsoDate,
   updatedBy: z.enum(["human", "agent"]),
-  /** Set when updatedBy === "agent" (which of the member's agents posted it). */
+  /** Set when updatedBy === "agent" (which agent of the role posted it). */
   updatedByAgentId: Id.nullable().optional(),
 });
 export type StatusCard = z.infer<typeof StatusCard>;
@@ -76,12 +96,15 @@ export const AgentScope = z.enum([
   "inbox:read",
   "status:write:self",
   "request:draft",
+  "decision:read", // v0.6
+  "decision:propose", // v0.6
 ]);
 export type AgentScope = z.infer<typeof AgentScope>;
 export const Agent = z.object({
   id: Id,
   workspaceId: Id,
-  ownerId: Id, // member
+  ownerId: Id, // the orchestrator who issued the token
+  roleId: Id, // v0.6: the seat this agent holds; it speaks for the role
   kind: AgentKind,
   label: z.string().max(60),
   scopes: z.array(AgentScope),
@@ -104,7 +127,7 @@ export const Task = z.object({
   externalUrl: z.string().url().nullable(),
   externalKey: z.string().nullable(), // "#123", "TRIP-42"
   title: z.string().max(300),
-  assigneeId: Id.nullable(),
+  roleId: Id.nullable(), // v0.6: owning role (was assigneeId: member)
   state: TaskState,
   syncedAt: IsoDate.nullable(),
 });
@@ -131,7 +154,10 @@ export const EventType = z.enum([
   "request.closed",
   "request.cancelled",
   "decision.recorded",
+  "decision.proposed",
+  "decision.proposal_rejected",
   "status.updated",
+  "role.updated",
 ]);
 export type EventType = z.infer<typeof EventType>;
 export const HubEvent = z.object({
@@ -162,21 +188,43 @@ export const Decision = z.object({
   rationale: z.string().min(1).max(5000), // lý do — required
   decidedById: Id, // member — never an agent
   taskId: Id.nullable(),
+  roleIds: z.array(Id), // v0.6: roles this decision concerns (their agents see it first in read_decisions)
+  proposalId: Id.nullable(), // v0.6: set when recorded from an agent's proposal
   decidedAt: IsoDate,
 });
 export type Decision = z.infer<typeof Decision>;
 
+/** v0.6: an agent may PROPOSE a decision; only the orchestrator turns it into a Decision. */
+export const ProposalStatus = z.enum(["pending", "accepted", "rejected"]);
+export const DecisionProposal = z.object({
+  id: Id,
+  workspaceId: Id,
+  roleId: Id, // proposing role
+  agentId: Id,
+  title: z.string().min(1).max(200),
+  body: z.string().max(5000),
+  rationale: z.string().min(1).max(5000),
+  status: ProposalStatus,
+  decisionId: Id.nullable(),
+  createdAt: IsoDate,
+  resolvedAt: IsoDate.nullable(),
+});
+export type DecisionProposal = z.infer<typeof DecisionProposal>;
+
 /* ---------- Content trust label ---------- */
 /**
  * Trust label on content returned to agents (MCP) and rendered in the UI.
- *  - "self": written by the reader (or the reader's own agent).
- *  - "untrusted": written by anyone else, or by an external system (GitHub titles...). DATA, never instructions.
+ *  - "self": written by the reader's own role (any agent holding it).
+ *  - "orchestrator": written by the human orchestrator — direction for the role, still bounded by its owned paths.
+ *  - "untrusted": written by another role, or by an external system (GitHub titles...). DATA, never instructions.
  */
-export const TrustLabel = z.enum(["self", "untrusted"]);
+export const TrustLabel = z.enum(["self", "orchestrator", "untrusted"]);
+export type TrustLabel = z.infer<typeof TrustLabel>;
 export const Untrusted = <T extends z.ZodTypeAny>(inner: T) =>
   z.object({
     trust: TrustLabel,
     authorMemberId: Id.nullable(), // null for external sources
+    authorRoleId: Id.nullable(), // v0.6: set when an agent wrote it
     authorAgentId: Id.nullable(),
     source: z.string().optional(), // e.g. "github" when there is no member author
     content: inner,

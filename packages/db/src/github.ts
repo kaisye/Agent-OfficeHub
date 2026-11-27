@@ -20,7 +20,7 @@ type Payload = any;
 
 interface Mapped {
   type: EventType;
-  task?: { source: "github_pr" | "github_issue"; key: string; url: string | null; title: string; state: TaskState; assigneeLogin: string | null };
+  task?: { source: "github_pr" | "github_issue"; key: string; url: string | null; title: string; state: TaskState; assigneeLogin: string | null; branch?: string | null };
   taskRef?: { source: "github_pr"; key: string };
   data: Record<string, unknown>;
 }
@@ -35,6 +35,7 @@ export function mapGithubEvent(name: string, p: Payload): Mapped | null {
       url: pr.html_url ?? null,
       title: String(pr.title ?? `PR #${pr.number}`).slice(0, 300),
       assigneeLogin: pr.assignee?.login ?? pr.user?.login ?? null,
+        branch: pr.head?.ref ?? null,
       state: "in_progress" as TaskState,
     };
     const data = { number: pr.number, action, repo: p.repository?.full_name ?? null, author: pr.user?.login ?? null };
@@ -86,14 +87,14 @@ export function mapGithubEvent(name: string, p: Payload): Mapped | null {
 }
 
 async function upsertTask(tx: Tx, workspaceId: string, t: NonNullable<Mapped["task"]>): Promise<string> {
-  const a = t.assigneeLogin
-    ? (await tx`SELECT id FROM members WHERE lower(github_login) = lower(${t.assigneeLogin})`)[0]
-    : undefined;
-  const [row] = await tx`INSERT INTO tasks (workspace_id, source, external_url, external_key, title, assignee_id, state, synced_at)
-    VALUES (${workspaceId}, ${t.source}, ${t.url}, ${t.key}, ${t.title}, ${a?.id ?? null}, ${t.state}, now())
+  // v0.6: a PR belongs to the role named by its branch prefix ("backend/queue-api" -> backend).
+  const prefix = t.branch?.split("/")[0]?.toLowerCase() ?? null;
+  const role = prefix ? (await tx`SELECT id FROM roles WHERE key = ${prefix}`)[0] : undefined;
+  const [row] = await tx`INSERT INTO tasks (workspace_id, source, external_url, external_key, title, role_id, state, synced_at)
+    VALUES (${workspaceId}, ${t.source}, ${t.url}, ${t.key}, ${t.title}, ${role?.id ?? null}, ${t.state}, now())
     ON CONFLICT (workspace_id, source, external_key) WHERE external_key IS NOT NULL
     DO UPDATE SET title = EXCLUDED.title, state = EXCLUDED.state, external_url = COALESCE(EXCLUDED.external_url, tasks.external_url),
-      assignee_id = COALESCE(EXCLUDED.assignee_id, tasks.assignee_id), synced_at = now()
+      role_id = COALESCE(EXCLUDED.role_id, tasks.role_id), synced_at = now()
     RETURNING id`;
   return row!.id as string;
 }

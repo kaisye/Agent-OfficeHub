@@ -6,7 +6,7 @@ import { SHOW_DEV_LOGIN, getApi } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
 import { safeNext } from "@/lib/nav";
 
-/** `/dev-login?member=<id>[&next=/w/tripflix/...]`: logs in and moves on. Dev only (also used for screenshots). */
+/** `/dev-login?member=<id>[&next=/w/office-hub-dev/...]`: logs in and moves on. Dev only (also used for screenshots). */
 export function DevLogin() {
   const params = useSearchParams();
   const router = useRouter();

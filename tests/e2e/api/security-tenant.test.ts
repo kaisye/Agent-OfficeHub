@@ -1,107 +1,127 @@
-/** Cross-tenant isolation: a second workspace (created in SQL), id/slug swapping, RLS at the DB level, SSE, MCP. */
+/** Cross-tenant isolation (v0.6): two workspaces (each its own orchestrator + 6 roles), id/slug swapping, RLS at the DB level, SSE, MCP. */
 import { beforeAll, describe, expect, it } from "vitest";
 import postgres from "postgres";
-import { MEMBER, W, act, api, board, createAgent, login, sentRequest, sql, sseCollect, tool, toolErrCode, uniq, type Session } from "../src/helpers.js";
-import { ensureTenant2, type Tenant2 } from "../src/tenant.js";
+import { W, act, agentDraft, agentSent, api, assign, board, createAgent, createWorld, roleStatus, sql, sseCollect, tool, toolErrCode, uniq, type AgentCred, type World } from "../src/helpers.js";
 
-let t2: Tenant2;
-let bao: Session, trang: Session, phong: Session;
-let reqId: string;
+let a: World, b: World; // a = "home", b = the other tenant
+let aFe: AgentCred, aBe: AgentCred, bFe: AgentCred, bBe: AgentCred;
+let reqId: string; // a sent request in A
+let bReq: string; // a sent request in B
+let bDraft: string; // an unsent draft in B
 let taskId: string;
-let t2Req: string;
+let aProposal: string;
 
 beforeAll(async () => {
-  t2 = await ensureTenant2();
-  [bao, trang, phong] = await Promise.all([login(MEMBER.bao), login(MEMBER.trang), login(MEMBER.phong)]);
-  reqId = (await sentRequest(bao, MEMBER.trang, { title: uniq("QA-E2E-tenant") })).id;
-  taskId = (await board(bao)).tasks[0].id;
-  t2Req = (await sentRequest(t2.mallory, t2.eveId, { title: uniq("QA-E2E-t2req") })).id;
+  [a, b] = await Promise.all([createWorld("tenant-a"), createWorld("tenant-b")]);
+  [aFe, aBe, bFe, bBe] = await Promise.all([createAgent(a, "frontend"), createAgent(a, "backend"), createAgent(b, "frontend"), createAgent(b, "backend")]);
+  reqId = (await agentSent(a, aFe, "backend", { title: uniq("QA-E2E-tenant") })).id;
+  bReq = (await agentSent(b, bFe, "backend", { title: uniq("QA-E2E-t2req") })).id;
+  bDraft = (await agentDraft(bFe, "backend", { title: uniq("QA-E2E-t2draft") })).id;
+  const [t] = await sql()`INSERT INTO tasks (workspace_id, source, title, state) VALUES (${a.id}, 'manual', 'QA-E2E tenant task', 'open') RETURNING id`;
+  taskId = t!.id as string;
+  aProposal = (await tool(aBe.token, "propose_decision", { title: uniq("QA-E2E-tprop"), body: "b", rationale: "r" })).data.proposalId;
 });
 
 describe("session / slug swapping", () => {
-  it("each tenant sees only its own members and board", async () => {
-    const b2 = await board(t2.eve);
-    expect(b2.workspace.slug).toBe(t2.slug);
-    expect(b2.members.map((m: any) => m.id)).toEqual(expect.arrayContaining([t2.eveId, t2.malloryId]));
-    expect(b2.members.every((m: any) => m.workspaceId === undefined || m.workspaceId === t2.workspaceId)).toBe(true);
-    expect(JSON.stringify(b2)).not.toContain("Tripflix");
-    const b1 = await board(bao);
-    expect(JSON.stringify(b1)).not.toContain("Mallory");
+  it("each tenant sees only its own roles and board; no member list exists any more", async () => {
+    const bb = await board(b);
+    expect(bb.workspace.slug).toBe(b.slug);
+    expect(bb.orchestrator.id).toBe(b.orchestratorId);
+    expect(bb.roles.map((r: any) => r.id).sort()).toEqual(Object.values(b.roles).sort());
+    expect(bb.roles.every((r: any) => r.workspaceId === b.id)).toBe(true);
+    expect(JSON.stringify(bb)).not.toContain(a.slug);
+    expect(JSON.stringify(bb)).not.toContain(a.orchestratorId);
+    expect(JSON.stringify(await board(a))).not.toContain(b.orchestratorId);
   });
   it("a session never works under another workspace's slug (every read route)", async () => {
-    for (const p of ["/board", "/requests", "/inbox", "/decisions", "/agents", "/audit", "/stream"]) {
-      expect((await api(t2.eve, "GET", W(p, "tripflix"))).status, `eve ${p}`).toBe(404);
-      expect((await api(phong, "GET", W(p, t2.slug))).status, `phong(admin) ${p}`).toBe(404);
+    for (const p of ["/board", "/roles", "/queue", "/proposals", "/requests", "/decisions", "/agents", "/audit", "/stream"]) {
+      expect((await api(b.orch, "GET", W(a, p))).status, `b->a ${p}`).toBe(404);
+      expect((await api(a.orch, "GET", W(b, p))).status, `a->b ${p}`).toBe(404);
     }
+    expect((await api(b.orch, "GET", W(a, `/tasks/${taskId}/handoff`))).status).toBe(404);
   });
-  it("tripflix ids replayed on the other tenant's routes are 404/400 (actions, read, getRequest, handoff, revoke)", async () => {
-    expect((await act(t2.eve, reqId, "cancel").then((r) => r)).status).toBe(404);
-    const acts = await api(t2.eve, "POST", W(`/requests/${reqId}/actions`, t2.slug), { action: "cancel" });
-    expect(acts.status).toBe(404);
-    expect((await api(t2.eve, "POST", W(`/requests/${reqId}/read`, t2.slug))).status).toBe(404);
-    expect((await api(t2.eve, "GET", W(`/requests/${reqId}`, t2.slug))).status).toBe(404);
-    expect((await api(t2.eve, "GET", W(`/tasks/${taskId}/handoff`, t2.slug))).status).toBe(404);
-    const [ag] = (await api(bao, "GET", W("/agents"))).body as any[];
-    expect((await api(t2.eve, "DELETE", W(`/agents/${ag.id}`, t2.slug))).status).toBe(404);
-    // and the reverse
-    expect((await api(bao, "GET", W(`/requests/${t2Req}`))).status).toBe(404);
-    expect((await api(bao, "POST", W(`/requests/${t2Req}/actions`), { action: "cancel" })).status).toBe(404);
+  it("A's ids replayed on B's routes (and the reverse) are 404 (actions, read, getRequest, handoff, revoke, proposals, roles)", async () => {
+    expect((await act(b, reqId, "cancel")).status).toBe(404); // B's session under B's slug, A's request id
+    expect((await api(b.orch, "POST", W(b, `/requests/${reqId}/actions`), { action: "send_reply", body: "x" })).status).toBe(404);
+    expect((await api(b.orch, "POST", W(b, `/requests/${reqId}/read`))).status).toBe(404);
+    expect((await api(b.orch, "GET", W(b, `/requests/${reqId}`))).status).toBe(404);
+    expect((await api(b.orch, "GET", W(b, `/tasks/${taskId}/handoff`))).status).toBe(404);
+    expect((await api(b.orch, "POST", W(b, `/proposals/${aProposal}`), { action: "accept" })).status).toBe(404);
+    expect((await api(b.orch, "DELETE", W(b, `/agents/${aFe.id}`))).status).toBe(404);
+    expect((await api(b.orch, "PUT", W(b, `/roles/${a.roles.qa}`), { mission: "x" })).status).toBe(404);
+    expect((await api(b.orch, "PUT", W(b, `/roles/${a.roles.qa}/status`), { presence: "idle", doing: null, branch: null, waitingOn: [] })).status).toBe(404);
+    // and the reverse, including B's unsent draft
+    expect((await api(a.orch, "GET", W(a, `/requests/${bReq}`))).status).toBe(404);
+    expect((await api(a.orch, "GET", W(a, `/requests/${bDraft}`))).status).toBe(404);
+    expect((await api(a.orch, "POST", W(a, `/requests/${bDraft}/actions`), { action: "send" })).status).toBe(404);
+    expect((await api(a.orch, "POST", W(a, `/requests/${bReq}/actions`), { action: "cancel" })).status).toBe(404);
+    // nothing changed
+    expect((await api(a.orch, "GET", W(a, `/requests/${reqId}`))).body.status).toBe("sent");
+    expect((await api(b.orch, "GET", W(b, `/requests/${bDraft}`))).body.status).toBe("draft");
   });
-  it("foreign ids as payload references are rejected: receiver, taskId (request + decision), waitingOn", async () => {
-    const post = (b: any) => api(t2.eve, "POST", W("/requests", t2.slug), { title: "QA-E2E-x", body: "b", taskId: null, dueAt: null, ...b });
-    expect((await post({ receiverId: MEMBER.trang })).status).toBe(400);
-    expect((await post({ receiverId: t2.malloryId, taskId })).status).toBe(400);
-    expect((await api(t2.eve, "POST", W("/decisions", t2.slug), { title: "QA-E2E-d", body: "", rationale: "r", taskId })).status).toBe(400);
-    expect((await api(t2.eve, "PUT", W("/status", t2.slug), { presence: "waiting", doing: null, branch: null, waitingOn: [MEMBER.trang] })).status).toBe(400);
+  it("foreign ids as payload references are rejected: receiver role, taskId (request + decision), roleIds, waitingOn, agent role", async () => {
+    const post = (body: any) => api(b.orch, "POST", W(b, "/requests"), { kind: "question", title: "QA-E2E-x", body: "b", taskId: null, dueAt: null, receiverRoleId: b.roles.qa, ...body });
+    expect((await post({ receiverRoleId: a.roles.backend })).status).toBe(400);
+    expect((await post({ taskId })).status).toBe(400);
+    expect((await api(b.orch, "POST", W(b, "/decisions"), { title: "QA-E2E-d", body: "", rationale: "r", taskId })).status).toBe(400);
+    expect((await api(b.orch, "POST", W(b, "/decisions"), { title: "QA-E2E-d", body: "", rationale: "r", taskId: null, roleIds: [a.roles.backend] })).status).toBe(400);
+    expect((await roleStatus(b, "qa", { presence: "waiting", waitingOn: [a.roles.backend] })).status).toBe(400);
+    expect((await api(b.orch, "POST", W(b, "/agents"), { roleId: a.roles.qa, kind: "codex", label: "qa-e2e-x", scopes: [] })).status).toBe(400);
   });
-  it("login is by member id: a tripflix session cannot be pointed at tenant 2 by cookie or slug tricks", async () => {
-    const forged = { ...phong, cookie: phong.cookie };
-    expect((await api(forged, "GET", "/w/qa-e2e-other/board")).status).toBe(404);
-    expect((await api(forged, "GET", "/w/%71a-e2e-other/board")).status).toBe(404);
-    expect((await api(forged, "GET", "/w/tripflix%2f..%2fqa-e2e-other/board")).status).toBe(404);
+  it("login is by member id: A's session cannot be pointed at B by cookie or slug tricks", async () => {
+    for (const p of [`/w/${b.slug}/board`, `/w/${b.slug.replace("qa", "%71a")}/board`, `/w/${a.slug}%2f..%2f${b.slug}/board`]) expect((await api(a.orch, "GET", p)).status, p).toBe(404);
   });
 });
 
 describe("MCP across tenants", () => {
-  it("tenant-2 agent cannot read, draft against or address tripflix", async () => {
-    const tok = t2.agentToken;
-    const b = JSON.stringify((await tool(tok, "read_board")).data);
-    expect(b).not.toContain("Tripflix");
-    expect(b).not.toContain(reqId);
+  it("B's agent cannot read, draft against or address A", async () => {
+    const tok = bFe.token;
+    const bd = JSON.stringify((await tool(tok, "read_board")).data) + JSON.stringify((await tool(tok, "list_inbox")).data);
+    expect(bd).not.toContain(reqId);
+    expect(bd).not.toContain(a.slug);
     expect(toolErrCode(await tool(tok, "reply_draft", { requestId: reqId, body: "x" }))).toBe("not_found");
-    expect(toolErrCode(await tool(tok, "send_request", { receiverId: MEMBER.trang, title: "x", body: "y" }))).toBe("validation_failed");
-    expect(toolErrCode(await tool(tok, "send_request", { receiverId: t2.malloryId, title: "x", body: "y", taskId }))).toBe("validation_failed");
+    expect(toolErrCode(await tool(tok, "send_request", { to: "backend", title: "x", body: "y", taskId }))).toBe("validation_failed");
+    expect((await tool(tok, "read_decisions")).data.decisions).toEqual([]);
   });
-  it("tripflix agent cannot reach tenant-2 requests", async () => {
-    const a = await createAgent(trang);
-    expect(toolErrCode(await tool(a.token, "reply_draft", { requestId: t2Req, body: "x" }))).toBe("not_found");
-    expect(JSON.stringify((await tool(a.token, "list_inbox")).data)).not.toContain(t2Req);
+  it("tool role keys resolve inside the caller's own workspace only (same key, different role id)", async () => {
+    // B's frontend drafts to "backend": it must land on B's backend role, never A's
+    const d = await agentDraft(bFe, "backend", { title: uniq("QA-E2E-keyscope") });
+    const r = (await api(b.orch, "GET", W(b, `/requests/${d.id}`))).body;
+    expect(r.receiverRoleId).toBe(b.roles.backend);
+    expect((await api(a.orch, "GET", W(a, "/requests"))).text).not.toContain(d.id);
+  });
+  it("A's agent cannot reach B's requests or proposals", async () => {
+    expect(toolErrCode(await tool(aBe.token, "reply_draft", { requestId: bReq, body: "x" }))).toBe("not_found");
+    expect(JSON.stringify((await tool(aBe.token, "list_inbox")).data)).not.toContain(bReq);
   });
 });
 
 describe("SSE across tenants", () => {
-  it("tenant-2 subscribers get nothing from tripflix activity, and vice versa", async () => {
-    const [eveSse, trangSse] = await Promise.all([
-      sseCollect(t2.eve, 3500),
-      sseCollect(trang, 3500, async () => {
-        const r = await sentRequest(bao, MEMBER.trang, { title: uniq("QA-E2E-ssecross") });
-        await act(trang, r.id, "send_reply", "ans");
-        await sentRequest(t2.mallory, t2.eveId, { title: uniq("QA-E2E-ssecross2") });
+  it("B's subscriber gets nothing from A's activity, and vice versa", async () => {
+    const [bSse, aSse] = await Promise.all([
+      sseCollect(b.orch, 3500),
+      sseCollect(a.orch, 3500, async () => {
+        const r = await assign(a, "backend", { title: uniq("QA-E2E-ssecross") });
+        await act(a, r.id, "send_reply", "ans");
+        await roleStatus(a, "qa", { presence: "working", doing: "QA-E2E sse" });
+        await assign(b, "backend", { title: uniq("QA-E2E-ssecross2") });
       }),
     ]);
-    expect(eveSse.status).toBe(200);
-    expect(eveSse.text.match(/event: change/g)?.length ?? 1).toBeGreaterThanOrEqual(1); // own workspace activity arrives
-    expect(eveSse.text).not.toContain(reqId);
-    // trang's stream must not contain ids that exist only in tenant 2
-    const ids = [...trangSse.text.matchAll(/"id":"([0-9a-f-]{36})"/g)].map((m) => m[1]!);
+    expect(bSse.status).toBe(200);
+    expect(bSse.text.match(/event: change/g)?.length ?? 0).toBeGreaterThanOrEqual(1); // its own activity arrives
+    expect(bSse.text).not.toContain(reqId);
+    expect(bSse.text).not.toContain(a.roles.qa);
+    const ids = [...aSse.text.matchAll(/"id":"([0-9a-f-]{36})"/g)].map((m) => m[1]!);
     expect(ids.length).toBeGreaterThan(0);
-    expect(ids).not.toContain(t2Req);
+    expect(ids).not.toContain(bReq);
+    expect(ids).not.toContain(bDraft);
+    expect(ids).not.toContain(b.roles.backend);
   });
 });
 
 describe("Postgres RLS (officehub_app role) — the last line of defence", () => {
   const url = process.env.OH_APP_DB ?? "postgres://officehub_app:officehub_app@localhost:5433/officehub";
-  const tables = ["members", "status_cards", "agents", "tasks", "events", "requests", "request_messages", "decisions", "audit_log", "sessions", "inbox_reads"];
+  const tables = ["members", "roles", "status_cards", "agents", "tasks", "events", "requests", "request_messages", "decisions", "decision_proposals", "audit_log", "sessions", "inbox_reads", "role_reads"];
   it("no workspace GUC -> zero rows from every tenant table", async () => {
     const app = postgres(url, { max: 1 });
     try {
@@ -111,28 +131,35 @@ describe("Postgres RLS (officehub_app role) — the last line of defence", () =>
       await app.end();
     }
   });
-  it("with workspace A set, only A's rows are visible, cross-workspace writes fail (WITH CHECK) or touch 0 rows", async () => {
+  it("with workspace B set, only B's rows are visible, cross-workspace writes fail (WITH CHECK) or touch 0 rows", async () => {
     const app = postgres(url, { max: 1 });
     try {
       await app.begin(async (tx) => {
-        await tx`SELECT set_config('app.workspace_id', ${t2.workspaceId}, true)`;
-        expect((await tx`SELECT count(*)::int AS n FROM members`)[0]!.n).toBe((await sql()`SELECT count(*)::int AS n FROM members WHERE workspace_id = ${t2.workspaceId}`)[0]!.n);
+        await tx`SELECT set_config('app.workspace_id', ${b.id}, true)`;
+        for (const t of ["roles", "agents", "requests", "decision_proposals"]) {
+          expect((await tx.unsafe(`SELECT count(*)::int AS n FROM ${t} WHERE workspace_id <> $1`, [b.id]))[0]!.n, t).toBe(0);
+        }
+        expect((await tx`SELECT count(*)::int AS n FROM roles`)[0]!.n).toBe(6);
         expect((await tx`SELECT count(*)::int AS n FROM requests WHERE id = ${reqId}`)[0]!.n).toBe(0);
         expect((await tx`UPDATE requests SET status = 'cancelled' WHERE id = ${reqId} RETURNING id`).length).toBe(0);
+        expect((await tx`UPDATE roles SET mission = 'pwned' WHERE id = ${a.roles.qa} RETURNING id`).length).toBe(0);
+        expect((await tx`UPDATE decision_proposals SET status = 'accepted' WHERE id = ${aProposal} RETURNING id`).length).toBe(0);
       });
-      const wsT = (await board(bao)).workspace.id;
       await expect(
         app.begin(async (tx) => {
-          await tx`SELECT set_config('app.workspace_id', ${t2.workspaceId}, true)`;
-          await tx`INSERT INTO decisions (workspace_id, title, body, rationale, decided_by_id) VALUES (${wsT}, 'QA-E2E x', '', 'r', ${MEMBER.bao})`;
+          await tx`SELECT set_config('app.workspace_id', ${b.id}, true)`;
+          await tx`INSERT INTO decisions (workspace_id, title, body, rationale, decided_by_id) VALUES (${a.id}, 'QA-E2E x', '', 'r', ${a.orchestratorId})`;
         }),
       ).rejects.toThrow(/row-level security/);
-      const left = postgres(process.env.OH_DB ?? "postgres://officehub:officehub@localhost:5433/officehub", { max: 1 });
-      try {
-        expect((await left`SELECT count(*)::int AS n FROM requests WHERE id = ${reqId}`)[0]!.n).toBe(1);
-      } finally {
-        await left.end();
-      }
+      await expect(
+        app.begin(async (tx) => {
+          await tx`SELECT set_config('app.workspace_id', ${b.id}, true)`;
+          await tx`INSERT INTO status_cards (role_id, workspace_id, presence, updated_by) VALUES (${a.roles.qa}, ${a.id}, 'idle', 'human')`;
+        }),
+      ).rejects.toThrow(/row-level security/);
+      const left = (await sql()`SELECT (SELECT count(*)::int FROM requests WHERE id = ${reqId}) AS r, (SELECT mission FROM roles WHERE id = ${a.roles.qa}) AS m`)[0]!;
+      expect(left.r).toBe(1);
+      expect(left.m).not.toBe("pwned");
     } finally {
       await app.end();
     }

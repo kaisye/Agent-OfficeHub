@@ -39,7 +39,12 @@ import {
   getRequest,
   devMembers,
   updateOwnMascot,
-  updateOwnStatus,
+  updateRoleStatus,
+  updateRole,
+  listRoles,
+  approvalQueue,
+  listProposals,
+  actOnProposal,
   verifyGithubSignature,
   wrapInbox,
   workspaceBySlug,
@@ -367,9 +372,14 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
     });
   });
 
-  app.put("/w/:slug/status", async (c) => {
-    const body = await parseBody(c, Routes.updateMyStatus.body);
-    return c.json(await updateOwnStatus(H(c), body));
+  app.get("/w/:slug/roles", async (c) => c.json(await listRoles(H(c))));
+  app.put("/w/:slug/roles/:id", async (c) => {
+    const body = await parseBody(c, Routes.updateRole.body);
+    return c.json(await updateRole(H(c), uuidParam(c, "id"), body));
+  });
+  app.put("/w/:slug/roles/:id/status", async (c) => {
+    const body = await parseBody(c, Routes.updateRoleStatus.body);
+    return c.json(await updateRoleStatus(H(c), body, uuidParam(c, "id")));
   });
   app.put("/w/:slug/me/mascot", async (c) => {
     const body = await parseBody(c, Routes.updateMyMascot.body);
@@ -378,7 +388,7 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
 
   app.get("/w/:slug/requests", async (c) => c.json(await listRequests(H(c))));
   app.get("/w/:slug/requests/:id", async (c) => c.json(await getRequest(H(c), uuidParam(c, "id"))));
-  app.get("/w/:slug/inbox", async (c) => c.json(await listInbox(H(c), { actionOnly: true })));
+  app.get("/w/:slug/queue", async (c) => c.json(await approvalQueue(H(c))));
   app.post("/w/:slug/requests/:id/read", async (c) => {
     await markRead(H(c), uuidParam(c, "id"));
     return c.json({ ok: true });
@@ -390,13 +400,18 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
   app.post("/w/:slug/requests/:id/actions", async (c) => {
     const id = uuidParam(c, "id");
     const body = await parseBody(c, Routes.actOnRequest.body);
-    return c.json(await actOnRequest(H(c), id, body.action, body.body));
+    return c.json(await actOnRequest(H(c), id, body.action, body.body, { autoForwardReply: body.autoForwardReply }));
   });
 
   app.get("/w/:slug/decisions", async (c) => c.json(await listDecisions(H(c))));
   app.post("/w/:slug/decisions", async (c) => {
     const body = await parseBody(c, Routes.recordDecision.body);
     return c.json(await recordDecision(H(c), body), 201);
+  });
+  app.get("/w/:slug/proposals", async (c) => c.json(await listProposals(H(c))));
+  app.post("/w/:slug/proposals/:id", async (c) => {
+    const body = await parseBody(c, Routes.actOnProposal.body);
+    return c.json(await actOnProposal(H(c), uuidParam(c, "id"), body));
   });
 
   app.get("/w/:slug/agents", async (c) => c.json(await listMyAgents(H(c))));
@@ -434,8 +449,11 @@ export function createApp(over: Partial<ApiConfig> = {}): AppHandle {
   app.get("/agent/inbox", async (c) => {
     const a = c.get("agent");
     const items = await listInbox(a, { unreadOnly: c.req.query("unread") === "1", markRead: c.req.query("mark") === "1" });
+    const roles = await listRoles(a);
+    const key = new Map(roles.map((r) => [r.id, r.key]));
     await withWorkspace(a.workspaceId, (tx) => audit(tx, a.workspaceId, actorOf(a), { action: "agent.inbox", via: "api", meta: { count: items.length } }));
-    return c.json(wrapInbox(a.ownerId, items));
+    const me = roles.find((r) => r.id === a.roleId);
+    return c.json({ role: me ? { key: me.key, name: me.name } : null, ...wrapInbox(a.roleId, items, (id) => (id ? (key.get(id) ?? "?") : "orchestrator")) });
   });
 
   /* ---------------- webhooks ---------------- */

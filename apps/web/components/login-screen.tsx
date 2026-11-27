@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button, Icon, Mascot, useToast } from "@officehub/ui";
 import { useQuery } from "@tanstack/react-query";
-import { API_MODE, LOGIN_WORKSPACE, SEED_MEMBERS, SHOW_DEV_LOGIN, getApi } from "@/lib/api";
+import { API_MODE, LOGIN_WORKSPACE, MOCK_LOGIN, MOCK_ORCHESTRATOR, SHOW_DEV_LOGIN, getApi } from "@/lib/api";
 import { ApiClientError } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
 import { safeNext } from "@/lib/nav";
@@ -13,7 +13,7 @@ import { Field, TextInput } from "./form";
 /** GitHub login is optional: shown only when the API has an OAuth app configured (NEXT_PUBLIC_GITHUB_LOGIN=1). */
 const GITHUB_ENABLED = process.env.NEXT_PUBLIC_GITHUB_LOGIN === "1";
 
-const SEED_HERO = SEED_MEMBERS.find((m) => m.displayName === "Phong")?.mascot ?? SEED_MEMBERS[0]!.mascot;
+const SEED_HERO = MOCK_ORCHESTRATOR.mascot;
 
 export function LoginScreen() {
   const router = useRouter();
@@ -26,7 +26,7 @@ export function LoginScreen() {
   // 404 = dev login disabled on the API: hide the picker, GitHub login only.
   const devDisabled = devMembers.error instanceof ApiClientError && devMembers.error.status === 404;
   const list = devMembers.data ?? [];
-  const HERO = list.find((m) => m.displayName === "Phong")?.mascot ?? list[0]?.mascot ?? SEED_HERO;
+  const HERO = list[0]?.mascot ?? SEED_HERO;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -46,7 +46,7 @@ export function LoginScreen() {
 
   const github = () => {
     if (API_MODE === "mock") {
-      toast("Chế độ mô phỏng chưa có GitHub. Hãy chọn một thành viên bên dưới.", "info");
+      toast("Chế độ mô phỏng chưa có GitHub. Dùng đăng nhập nhanh bên dưới.", "info");
       return;
     }
     window.location.href = getApi().githubLoginUrl();
@@ -71,7 +71,7 @@ export function LoginScreen() {
         </div>
         <h1 className="mt-4 text-oh-3xl font-bold">Chào mừng đến Office Hub</h1>
         <p className="mt-2 max-w-md text-oh-base text-oh-ink-muted">
-          Một văn phòng nhỏ ấm áp, nơi cả nhóm thấy nhau đang làm gì. Agent soạn nháp, còn bạn luôn là người bấm gửi.
+          Bạn điều phối các agent, mỗi agent giữ một vai trò. Agent soạn nháp, bạn là cổng duyệt: không tin nào đi qua lại khi bạn chưa bấm.
         </p>
       </div>
 
@@ -88,7 +88,7 @@ export function LoginScreen() {
           {busy === "password" ? "Đang đăng nhập…" : "Đăng nhập"}
         </Button>
         <p className="text-center text-oh-xs text-oh-ink-muted">
-          Chưa có tài khoản? Nhờ quản trị viên gửi cho bạn một link mời.
+          {API_MODE === "mock" ? `Mô phỏng: ${MOCK_LOGIN.email} / ${MOCK_LOGIN.password}` : "Quên mật khẩu? Chạy pnpm db:invite trên máy chủ để lấy link đặt lại."}
         </p>
         {GITHUB_ENABLED && (
           <Button type="button" variant="secondary" className="w-full" onClick={github}>
@@ -102,18 +102,18 @@ export function LoginScreen() {
         <section aria-labelledby="dev-login" className="mt-10 rounded-oh-xl border border-dashed border-oh-border-strong bg-oh-surface p-5">
           <div className="flex items-center justify-between gap-2">
             <h2 id="dev-login" className="text-oh-lg font-semibold">
-              Chọn thành viên
+              Đăng nhập nhanh
             </h2>
             <span className="rounded-oh-full bg-oh-warning-soft px-2 py-0.5 text-oh-xs text-oh-warning-soft-fg">Chỉ dùng khi phát triển</span>
           </div>
           <p className="mt-1 text-oh-sm text-oh-ink-muted">
-            {API_MODE === "mock" ? "Dữ liệu mô phỏng Tripflix, nằm trong trình duyệt." : "Đăng nhập nhanh qua dev-login của API."}
+            {API_MODE === "mock" ? "Dữ liệu mô phỏng office-hub-dev (6 vai trò), nằm trong trình duyệt." : "Đăng nhập nhanh qua dev-login của API."}
           </p>
           {devMembers.isPending ? (
             <p role="status" className="mt-4 text-oh-sm text-oh-ink-muted">Đang tải danh sách…</p>
           ) : devMembers.isError ? (
             <p role="alert" className="mt-4 text-oh-sm text-oh-danger-soft-fg">
-              Chưa lấy được danh sách thành viên. Đăng nhập nhanh chỉ có khi API bật DEV_LOGIN_ENABLED.
+              Chưa lấy được người điều phối. Đăng nhập nhanh chỉ có khi API bật DEV_LOGIN_ENABLED.
             </p>
           ) : (
             <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">

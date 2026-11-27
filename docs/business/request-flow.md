@@ -1,153 +1,115 @@
-# Luồng yêu cầu (Request lifecycle)
+# Luồng yêu cầu (v0.6)
 
-Nguồn: `packages/shared/src/request.ts`. Từ khoá: **Hỏi** = asker (người hỏi); **Nhận** = receiver (người nhận). Chỉ người bấm các nút in đậm; agent chỉ soạn nháp.
+Nguồn: `packages/shared/src/request.ts`, `packages/db/src/requests.ts`, thiết kế `docs/redesign-orchestrator.md`.
 
-## 1. Sơ đồ trạng thái
+Từ khoá: **phía hỏi** (`askerRoleId`) và **phía nhận** (`receiverRoleId`) là **vai trò**; giá trị `null` nghĩa là người điều phối. Một yêu cầu luôn có ít nhất một phía là vai trò. Chỉ người điều phối bấm các nút in đậm; agent chỉ soạn nháp.
+
+## 1. Ba luồng chính
+
+| Luồng | Ví dụ | Đi như thế nào |
+|---|---|---|
+| A. Người điều phối → vai trò | Giao Backend làm route hàng chờ | Người điều phối tạo yêu cầu, nó **đã gửi** ngay (`sent`). Agent của vai trò soạn trả lời; người điều phối **Gửi trả lời** (thực chất là duyệt) rồi **Chấp nhận** |
+| B. Vai trò → vai trò | Frontend hỏi Backend shape của route | Agent Frontend `send_request` → nháp chờ duyệt. Người điều phối **Gửi** (có thể bật "tự chuyển trả lời" nếu là `question`). Agent Backend `reply_draft`; nếu đã bật tự chuyển thì câu trả lời tới thẳng Frontend, nếu không thì chờ người điều phối **Gửi trả lời**. Người điều phối **Chấp nhận** hoặc **Hỏi lại** |
+| C. Vai trò → người điều phối | Agent bị chặn, cần quyết định | Agent `send_request` với `to:"orchestrator"`, thường `kind=blocker`. Người điều phối **Gửi** (duyệt cho vào luồng) rồi tự trả lời, hoặc **Hủy** |
+
+## 2. Loại yêu cầu (`kind`)
+
+| Kind | Dùng khi | Ràng buộc |
+|---|---|---|
+| `question` | Hỏi thông tin | Loại duy nhất được tự chuyển trả lời |
+| `contract_change` | Đổi contract trong `packages/shared` | Chỉ gửi tới Leader |
+| `review` | Nhờ xem lại một thay đổi | |
+| `handoff` | Bàn giao phần việc, kèm file HANDOFF của vai trò | |
+| `blocker` | Bị chặn, không làm tiếp được | Lên đầu hàng chờ duyệt |
+
+## 3. Sơ đồ trạng thái
 
 ```
-            soạn (người / agent hỏi)
+        soạn (agent phía hỏi: nháp | người điều phối: đã gửi ngay)
                     │
-                 [draft] ──────────── Hủy (Hỏi) ───────────────┐
-                    │ **Gửi** (Hỏi)                              │
+                 [draft] ──────────── **Hủy** ─────────────────┐
+                    │ **Gửi** (duyệt; tuỳ chọn tự chuyển)        │
                     ▼                                            │
- ┌─────────────► [sent] ──── Hủy (Hỏi) ──────────────────────────┤
- │                 │  soạn trả lời (người / agent Nhận)           │
+ ┌─────────────► [sent] ──── **Hủy** ────────────────────────────┤
+ │                 │  soạn trả lời (agent phía nhận)              │
  │                 ▼                                              ▼
- │          [reply_drafted] ── Hủy (Hỏi) ───────────────► [cancelled]
- │                 │ **Gửi trả lời** (Nhận)  (cũng bấm được từ [sent])
- │                 ▼
- │             [replied] ──── **Chấp nhận** (Hỏi) ──► [closed]
- └── **Hỏi lại** (Hỏi) ◄─┘
+ │          [reply_drafted] ── **Hủy** ──────────────────► [cancelled]
+ │                 │ **Gửi trả lời** (duyệt)
+ │                 │   hoặc tự chuyển (question, đã bật) ──┐
+ │                 ▼                                        ▼
+ │             [replied] ──── **Chấp nhận** ──► [closed]
+ └── **Hỏi lại** ◄─┘  (tắt tự chuyển)
 ```
 
-"Quá hạn" không phải trạng thái: là nhãn suy ra khi `status` ∈ {sent, reply_drafted, replied} và `dueAt` < now.
+"Quá hạn" không phải trạng thái: là nhãn khi `status` ∈ {sent, reply_drafted, replied} và `dueAt` < now.
 
-## 2. Bảng chuyển trạng thái (khớp `TRANSITIONS`)
+## 4. Bảng chuyển trạng thái (khớp `TRANSITIONS`)
 
-| Hành động | Từ | Đến | Ai bấm | Agent làm được? | Event |
+| Hành động | Từ | Đến | Ai | Agent? | Event |
 |---|---|---|---|---|---|
-| (tạo nháp) | — | draft | Hỏi (người) hoặc agent của Hỏi (`send_request`) | Có (nháp) | `request.created` |
-| `send` | draft | sent | Hỏi, người | Không | `request.sent` |
-| `draft_reply` | sent, reply_drafted | reply_drafted | Nhận, người hoặc agent của Nhận (`reply_draft`) | Có (nháp) | `request.reply_drafted` |
-| `send_reply` | sent, reply_drafted | replied | Nhận, người | Không | `request.replied` |
-| `accept` | replied | closed | Hỏi, người | Không | `request.closed` |
-| `follow_up` | replied | sent | Hỏi, người | Không | `request.followed_up` |
-| `cancel` | draft, sent, reply_drafted | cancelled | Hỏi, người | Không | `request.cancelled` |
+| (tạo) | — | draft (agent) / sent (người điều phối) | Agent phía hỏi (`send_request`) hoặc người điều phối | Có (nháp) | `request.created` (+ `request.sent`) |
+| `send` | draft | sent | Người điều phối | Không | `request.sent` |
+| `draft_reply` | sent, reply_drafted | reply_drafted, hoặc replied nếu tự chuyển | Agent phía nhận (`reply_draft`) hoặc người điều phối | Có | `request.reply_drafted` (+ `request.replied`) |
+| `send_reply` | sent, reply_drafted | replied | Người điều phối | Không | `request.replied` |
+| `accept` | replied | closed | Người điều phối | Không | `request.closed` |
+| `follow_up` | replied | sent | Người điều phối | Không | `request.followed_up` |
+| `cancel` | draft, sent, reply_drafted | cancelled | Người điều phối | Không | `request.cancelled` |
 
-Quy tắc dữ liệu: `follow_up`, `draft_reply`, và `send_reply` từ `sent` bắt buộc có `body`; `send` có thể kèm `body` để gửi bản đã sửa (khi khác bản nháp → `editedBeforeSend=true`). Không có hành động từ `closed`/`cancelled`.
+Quy tắc dữ liệu: `follow_up`, `draft_reply` và `send_reply` từ `sent` bắt buộc có `body`; `send`/`send_reply` có thể kèm `body` đã sửa (`editedBeforeSend=true`). Không có hành động từ `closed`/`cancelled`.
 
-## 3. Mỗi bên thấy gì và bấm gì
+Tự chuyển trả lời (`autoForwardReply`): người điều phối bật khi bấm Gửi, chỉ cho `question`. Câu trả lời tự chuyển vẫn qua quét secret, ghi audit với `autoForwarded:true`, và `sentById` là người đã duyệt câu hỏi. `follow_up` tắt cờ này; muốn tự chuyển lần nữa phải bật lại.
 
-| Trạng thái | Hỏi thấy | Nhận thấy | Nút của Hỏi | Nút của Nhận |
-|---|---|---|---|---|
-| draft | Nháp của mình (nếu agent soạn: huy hiệu bot, "Nháp từ agent") | Không thấy | **Gửi**, Sửa, Hủy | — |
-| sent | "Đã gửi, chờ {Nhận}" | "Chờ bạn trả lời", nội dung câu hỏi | Hủy | Soạn trả lời / Nhờ agent soạn, **Gửi trả lời** (nhập trực tiếp) |
-| reply_drafted | Vẫn "Đã gửi, chờ {Nhận}" (không thấy nháp trả lời) | Nháp trả lời (có huy hiệu bot nếu agent soạn) | Hủy | Sửa nháp, **Gửi trả lời** |
-| replied | "Đã có trả lời" + nội dung | "Đã trả lời, chờ {Hỏi} chấp nhận" | **Chấp nhận**, **Hỏi lại** | — (xem lại) |
-| closed | "Đã xong" | "Đã xong" | — | — |
-| cancelled | "Đã hủy" | "Đã hủy" (nếu từng thấy), nội dung cũ vẫn đọc | — | — |
+## 5. Ai thấy gì
 
-Ghi chú: nháp (`sentById=null`) chỉ tác giả/chủ thấy. Admin không bấm hộ ai; admin chỉ xem.
-
-## 4. Thông báo (trigger)
-
-| Sự kiện | Gửi cho | Nội dung | Kênh (pilot: in-app) |
+| Trạng thái | Người điều phối | Agent phía hỏi | Agent phía nhận |
 |---|---|---|---|
-| `request.created` bởi agent | Chủ agent | "Agent soạn nháp: {title}. Xem và gửi." | Badge + danh sách |
-| `request.sent` | Nhận | "{Hỏi} hỏi bạn: {title}" | Badge + SSE |
-| `request.reply_drafted` bởi agent | Chủ agent (Nhận) | "Agent soạn nháp trả lời cho {title}." | Badge |
-| `request.replied` | Hỏi | "{Nhận} đã trả lời: {title}" | Badge + SSE |
-| `request.followed_up` | Nhận | "{Hỏi} hỏi lại: {title}" | Badge + SSE |
-| `request.closed` | Nhận | "{Hỏi} đã chấp nhận câu trả lời" (nhẹ, không badge đỏ) | Danh sách |
-| `request.cancelled` (đã gửi) | Nhận | "{Hỏi} đã hủy yêu cầu: {title}" | Badge |
-| Nhắc (mục 5) | Theo bảng nhắc | Theo bảng nhắc | Badge + SSE |
-| Nháp bị chặn (secret) | Người/chủ agent gửi | "Tin chưa được lưu vì có thể chứa bí mật." | Thông báo ngay |
+| draft | Trong hàng chờ duyệt: Gửi / Sửa / Hủy | Nháp của mình | Không thấy |
+| sent | "Chờ {vai trò nhận} trả lời" | "Đã gửi" | "Chờ bạn trả lời" + câu hỏi |
+| reply_drafted | Trong hàng chờ duyệt: nháp trả lời, Gửi trả lời / Sửa | Vẫn "Đã gửi" (không thấy nháp) | Nháp trả lời của mình |
+| replied | Chấp nhận / Hỏi lại | Câu trả lời | "Đã trả lời" |
+| closed / cancelled | Lịch sử | Lịch sử | Lịch sử |
 
-Không thông báo cho bên kia khi chỉ có nháp (draft, reply_drafted).
+Nháp (`sentById=null`) chỉ phía soạn và người điều phối thấy. Nội dung vai trò khác viết luôn mang nhãn `untrusted` khi tới agent.
 
-## 5. Lịch nhắc quá hạn (đề xuất)
+## 6. Hàng chờ duyệt (`GET /queue`)
 
-Giờ làm việc: T2–T6, 09:00–12:00 và 13:00–18:00 ICT (8 giờ/ngày). Nhắc chỉ gửi trong giờ làm việc; mốc rơi ngoài giờ dời sang 09:00 ngày làm việc kế tiếp. Mỗi mốc gửi đúng 1 lần. Không bao giờ tự đóng, tự hủy, hay tự đổi trạng thái.
+Trang chính của người điều phối. Gồm: nháp yêu cầu của agent (`draft`), nháp trả lời (`reply_drafted`), câu trả lời chờ chấp nhận (`replied`), yêu cầu gửi tới người điều phối (`sent`, phía nhận `null`), và đề xuất Quyết định chờ. Thứ tự: `blocker` trước, rồi `contract_change`, `review`, `question`, `handoff`; trong cùng loại, cũ hơn lên trước. Có thể duyệt gộp nhiều mục; mỗi mục vẫn ghi audit riêng.
 
-**A. Request `sent` (chờ Nhận), có `dueAt`**
+## 7. Thông báo và nhắc
 
-| Mốc | Gửi cho | Nội dung |
+| Sự kiện | Ai được báo | Kênh |
 |---|---|---|
-| `dueAt` − 1 giờ làm việc | Nhận | "Sắp đến hạn: {title} (còn 1 giờ)." |
-| `dueAt` (quá hạn) | Nhận và Hỏi | Nhận: "Đã quá hạn: {Hỏi} đang chờ bạn." Hỏi: "Quá hạn: {Nhận} chưa trả lời. Bạn có thể nhắn trực tiếp hoặc hủy." |
-| `dueAt` + 4 giờ làm việc | Nhận và Hỏi | Nhắc lần 2, cùng nội dung, thêm "đã quá hạn 4 giờ" |
-| `dueAt` + 1 ngày làm việc | Nhận và Hỏi, thêm admin (bản tóm tắt) | "Quá hạn 1 ngày." Admin: "Yêu cầu {title} giữa {Hỏi} và {Nhận} đang quá hạn." |
-| Mỗi ngày làm việc lúc 09:00, tối đa 5 ngày | Nhận và Hỏi | Nhắc gộp trong "Việc chờ" buổi sáng |
-| Sau đó: mỗi thứ Hai 09:00 | Hỏi và admin | "Yêu cầu vẫn mở {n} ngày: tiếp tục chờ, hủy, hoặc nhờ người khác?" (không nhắc Nhận nữa để tránh ồn, vẫn thấy trong "Chờ bạn trả lời") |
+| Agent tạo nháp / nháp trả lời / đề xuất | Người điều phối | Badge hàng chờ + SSE |
+| `request.sent`, `request.followed_up` | Agent phía nhận | `list_inbox`, hook Claude Code |
+| `request.replied` | Agent phía hỏi (và người điều phối nếu phía hỏi là mình) | `list_inbox`, badge |
+| `request.cancelled` | Agent phía nhận nếu đã thấy | `list_inbox` |
+| Nháp bị chặn vì secret | Agent gửi (lỗi 422) | Trả về ngay, không lưu |
 
-**B. Request `sent`, không có `dueAt` (mốc mềm, không gắn "Quá hạn")**
+Nhắc quá hạn (`reminders.ts`): khi tới `dueAt`, rồi mỗi 24 giờ làm việc (T2–T6, 09:00–12:00 và 13:00–18:00, giờ Việt Nam), phát `request.reminded` và ghi audit. Không bao giờ tự đóng, tự hủy hay đổi trạng thái.
 
-| Mốc | Gửi cho | Nội dung |
+## 8. Nhãn và lỗi (tiếng Việt)
+
+| Trạng thái / nhãn | Nhãn UI | Câu trợ giúp |
 |---|---|---|
-| `sent` + 2 giờ làm việc (khớp mục tiêu M2) | Nhận | "{Hỏi} đang chờ bạn từ 2 giờ." |
-| `sent` + 1 ngày làm việc | Nhận và Hỏi | "Yêu cầu chưa có trả lời sau 1 ngày." |
-| Sau đó như A (mỗi ngày tối đa 3 ngày, rồi hàng tuần) | — | — |
+| draft | Chờ duyệt | {vai trò} muốn gửi cho {vai trò}. Xem rồi bấm Gửi. |
+| sent | Đã gửi | Đang chờ {vai trò} trả lời. |
+| reply_drafted | Trả lời chờ duyệt | {vai trò} đã soạn trả lời. Xem rồi bấm Gửi trả lời. |
+| replied | Đã có trả lời | Chấp nhận để đóng, hoặc hỏi lại. |
+| closed | Đã xong | |
+| cancelled | Đã hủy | |
+| autoForwarded | Tự chuyển | Câu trả lời đã tới thẳng phía hỏi vì bạn bật tự chuyển. |
+| editedBeforeSend | Đã chỉnh sửa | Người điều phối đã sửa trước khi gửi. |
+| overdue | Quá hạn | Quá hạn {thời gian}; yêu cầu vẫn mở. |
 
-**C. Request `reply_drafted` (nháp chờ Nhận bấm gửi)**
+Lỗi: `human_only` → "Hành động này cần người điều phối bấm, agent không làm thay được." `wrong_side` → "Vai trò này không phải một phía của yêu cầu." `invalid_state` → "Yêu cầu đã chuyển sang bước khác, hãy tải lại." `secret_detected` → "Tin chưa được lưu: có vẻ chứa bí mật ({loại}). Bỏ giá trị đó và thử lại." `rate_limited` → "Thao tác quá nhanh, thử lại sau {n} giây."
 
-| Mốc | Gửi cho | Nội dung |
-|---|---|---|
-| nháp + 30 phút | Nhận | "Bạn có nháp trả lời chưa gửi." |
-| nháp + 2 giờ làm việc | Nhận | Nhắc lần 2 |
-| quá hạn | Nhận và Hỏi | như A (Hỏi chỉ biết "chờ", không biết có nháp) |
-
-**D. Request `replied` (chờ Hỏi chấp nhận/hỏi lại)**
-
-| Mốc | Gửi cho | Nội dung |
-|---|---|---|
-| `replied` + 4 giờ làm việc | Hỏi | "{Nhận} đã trả lời. Chấp nhận hoặc hỏi lại?" |
-| `replied` + 1 ngày làm việc, 3 ngày | Hỏi | Nhắc; sau 3 ngày chỉ hiện trong "Việc chờ" |
-
-**E. Request `draft` (chưa gửi)**
-
-| Mốc | Gửi cho | Nội dung |
-|---|---|---|
-| nháp + 1 ngày làm việc | Chủ nháp | "Nháp chưa gửi: {title}." Không nhắc lại; nháp không tự xoá. |
-
-Dừng nhắc ngay khi: trạng thái chuyển (reply gửi, closed, cancelled), hoặc đã nhắc đủ số lần. Ghi nhắc vào audit (không phải event nghiệp vụ). Khi `follow_up`, lịch tính lại như một `sent` mới (mốc mềm B, trừ khi có `dueAt` mới).
-
-## 6. Nhãn và câu trợ giúp (tiếng Việt)
-
-| Trạng thái / nhãn | Nhãn UI (≤ 20 ký tự) | Câu trợ giúp (1 dòng) | Hiển thị cho |
-|---|---|---|---|
-| draft (người soạn) | Bản nháp | Chưa gửi, chỉ mình bạn thấy. | Hỏi |
-| draft (agent soạn) | Nháp từ agent | Agent đã soạn giúp bạn; xem lại rồi bấm Gửi. | Hỏi |
-| sent | Đã gửi | Đang chờ {tên} trả lời. | Hỏi |
-| sent | Chờ bạn trả lời | {tên} đang chờ bạn; soạn hoặc nhờ agent soạn nháp. | Nhận |
-| reply_drafted | Nháp trả lời | Đã có nháp, xem lại rồi bấm Gửi trả lời. | Nhận |
-| reply_drafted | Đã gửi | Đang chờ {tên} trả lời. | Hỏi |
-| replied | Đã có trả lời | Chấp nhận để đóng, hoặc hỏi lại nếu chưa đủ. | Hỏi |
-| replied | Đã trả lời | Đang chờ {tên} chấp nhận. | Nhận |
-| closed | Đã xong | {tên} đã chấp nhận câu trả lời. | Cả hai |
-| cancelled | Đã hủy | Người hỏi đã hủy; không cần trả lời nữa. | Cả hai |
-| overdue (huy hiệu) | Quá hạn | Quá hạn {thời gian}; đã nhắc cả hai, yêu cầu vẫn mở. | Cả hai |
-| soft-due (nhãn nhẹ) | Chờ lâu | Chưa có trả lời sau {thời gian}. | Cả hai |
-| authoredBy=agent | Agent soạn | Do agent của {tên} soạn, {tên} đã duyệt. | Cả hai (sau khi gửi) |
-| editedBeforeSend | Đã chỉnh sửa | {tên} đã sửa nháp trước khi gửi. | Cả hai |
-
-| Nút | Nhãn | Chú thích |
-|---|---|---|
-| send | Gửi | "Chỉ khi bạn bấm, yêu cầu mới tới {tên}." |
-| draft_reply | Soạn trả lời | "Tự soạn hoặc nhờ agent soạn nháp." |
-| send_reply | Gửi trả lời | "Câu trả lời tới {tên} khi bạn bấm." |
-| accept | Chấp nhận | "Đóng yêu cầu." |
-| follow_up | Hỏi lại | "Gửi lại cho {tên} kèm câu hỏi thêm." |
-| cancel | Hủy yêu cầu | Hộp xác nhận: "Hủy yêu cầu này? {tên} sẽ được báo nếu đã nhận." |
-
-Thông báo lỗi: `human_only` → "Hành động này cần bạn bấm trực tiếp, agent không làm thay được." `wrong_side` → "Hành động này dành cho {người hỏi/người nhận}." `invalid_state` → "Yêu cầu đã chuyển sang bước khác, hãy tải lại." `secret_detected` → "Tin chưa được lưu: có vẻ chứa bí mật ({loại}). Bỏ giá trị đó và thử lại." `rate_limited` → "Thao tác quá nhanh, thử lại sau {n} giây."
-
-## 7. Trường hợp biên
+## 9. Trường hợp biên
 
 | Tình huống | Hành vi |
 |---|---|
-| Nhận trả lời sau khi quá hạn | Chấp nhận bình thường, nhắc chuyển sang bên Hỏi (mục D) |
-| Hỏi hủy khi Nhận đang có nháp | Nháp giữ trong lịch sử, không gửi đi; Nhận được báo hủy |
-| Hai người cùng bấm (đua) | Người đến sau nhận `invalid_state` ở lần tải lại; không nhân đôi message/event |
-| Agent của Nhận bị thu hồi khi đang có nháp | Nháp giữ, vẫn gắn "Agent soạn"; người Nhận vẫn gửi được |
-| Nhận không muốn/không thể trả lời | Hiện tại chỉ trả lời kèm gợi ý người khác (chưa có `decline`/`reassign`, xem HANDOFF) |
-| Hỏi lại nhiều vòng | Mỗi vòng thêm message `follow_up` rồi `reply`; metric M2 tính từng vòng |
+| Người điều phối hủy khi phía nhận đang có nháp | Nháp giữ trong lịch sử, không gửi đi |
+| Hai tab cùng bấm | Lần sau nhận `invalid_state`; không nhân đôi message/event |
+| Token agent bị thu hồi khi đang có nháp | Nháp giữ, vẫn gắn agent đã soạn; người điều phối vẫn gửi được |
+| Agent tạo quá 10 nháp mở | 429 `rate_limited`, đợi người điều phối xử lý hàng chờ |
+| Agent sửa file ngoài vùng sở hữu | `post_status` / `check_paths` trả `outOfArea`; bàn của vai trò hiện cảnh báo |
+| Hỏi lại nhiều vòng | Mỗi vòng thêm message `follow_up` rồi `reply`; tự chuyển phải bật lại mỗi vòng |

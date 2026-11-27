@@ -3,6 +3,7 @@ import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { Member, Request } from "@officehub/shared";
+import type { PartyDisplay } from "./index.js";
 import { Dialog, Mascot, MemberCard, RequestCard, TaskChip, ToastProvider, TokenRevealOnce, UntrustedQuote, useToast, availableActions, relativeTimeVi } from "./index.js";
 
 afterEach(cleanup);
@@ -16,48 +17,54 @@ const mem = (id: string, name: string): Member => ({
 });
 const asker = mem(A, "Trang");
 const receiver = mem(B, "Phong");
+const ME = "66666666-6666-4666-8666-666666666666";
+const fe: PartyDisplay = { displayName: "Frontend", mascot: { buddy: "milo" } };
+const be: PartyDisplay = { displayName: "Backend", mascot: { buddy: "blu" } };
 const T = "2026-11-09T10:00:00+07:00";
 const req = (status: Request["status"], msg?: Partial<Request["messages"][number]>): Request => ({
-  id: "44444444-4444-4444-8444-444444444444", workspaceId: W, askerId: A, receiverId: B, taskId: null,
+  id: "44444444-4444-4444-8444-444444444444", workspaceId: W, askerRoleId: A, receiverRoleId: B, kind: "question", autoForwardReply: false, taskId: null,
   title: "Server đang ghim tag nào?", status, dueAt: null, createdAt: T, updatedAt: T,
   messages: [{
     id: "55555555-5555-4555-8555-555555555555", requestId: "44444444-4444-4444-8444-444444444444", kind: "ask",
-    body: "Cho mình xin tag", authoredBy: "agent", authorAgentId: null, sentById: null, editedBeforeSend: false, createdAt: T, ...msg,
-  }],
+    body: "Cho mình xin tag", authoredBy: "agent", authorRoleId: A, authorAgentId: null, sentById: null, editedBeforeSend: false, createdAt: T, ...msg,
+  } as Request["messages"][number]],
 });
 
 describe("availableActions (delegates to canTransition)", () => {
-  it("asker sees send + cancel on a draft; receiver sees nothing", () => {
-    expect(availableActions(req("draft"), { kind: "human", memberId: A })).toEqual(["send", "cancel"]);
-    expect(availableActions(req("draft"), { kind: "human", memberId: B })).toEqual([]);
+  const human = { kind: "human", memberId: ME } as const;
+  it("the orchestrator may forward or cancel a draft; an agent may not", () => {
+    expect(availableActions(req("draft"), human)).toEqual(["send", "cancel"]);
+    expect(availableActions(req("draft"), { kind: "agent", agentId: "x", roleId: A })).toEqual([]);
   });
-  it("receiver can send reply; asker can accept / follow up on replied", () => {
-    expect(availableActions(req("sent"), { kind: "human", memberId: B })).toContain("send_reply");
-    expect(availableActions(req("replied"), { kind: "human", memberId: A })).toEqual(["accept", "follow_up"]);
-    expect(availableActions(req("closed"), { kind: "human", memberId: A })).toEqual([]);
+  it("orchestrator can reply on sent; close / follow up on replied", () => {
+    expect(availableActions(req("sent"), human)).toContain("send_reply");
+    expect(availableActions(req("replied"), human)).toEqual(["accept", "follow_up"]);
+    expect(availableActions(req("closed"), human)).toEqual([]);
+  });
+  it("the receiving role's agent may only draft a reply", () => {
+    expect(availableActions(req("sent"), { kind: "agent", agentId: "x", roleId: B })).toEqual(["draft_reply"]);
+    expect(availableActions(req("sent"), { kind: "agent", agentId: "x", roleId: A })).toEqual([]);
   });
 });
 
 describe("RequestCard", () => {
-  it("agent draft: Gửi lives in the DraftBlock and fires the send action", () => {
+  it("agent draft: Chuyển lives in the DraftBlock and fires the send action", () => {
     const onAction = vi.fn();
-    render(<RequestCard request={req("draft")} asker={asker} receiver={receiver} viewerMemberId={A} onAction={onAction} />);
+    render(<RequestCard request={req("draft")} asker={fe} receiver={be} viewerMemberId={ME} onAction={onAction} />);
     expect(screen.getByLabelText(/Bản nháp do agent soạn/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /^Gửi$/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Chuyển$/ }));
     expect(onAction).toHaveBeenCalledWith("send", expect.anything());
-    expect(screen.getByRole("button", { name: /Hủy yêu cầu/ })).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: /^Gửi$/ })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: /^Hủy$/ })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /^Chuyển$/ })).toHaveLength(1);
   });
-  it("receiver cannot see asker's buttons and sees the message as untrusted", () => {
-    render(<RequestCard request={req("sent", { sentById: A, authoredBy: "human" })} asker={asker} receiver={receiver} viewerMemberId={B} />);
-    expect(screen.queryByRole("button", { name: /Hủy yêu cầu/ })).toBeNull();
-    expect(screen.getByRole("button", { name: /^Gửi trả lời$/ })).toBeTruthy();
-    expect(screen.getByLabelText(/Nội dung từ Trang, chưa xác minh/)).toBeTruthy();
+  it("a forwarded agent message is shown as untrusted, labelled with its role", () => {
+    render(<RequestCard request={req("sent", { sentById: ME })} asker={fe} receiver={be} viewerMemberId={ME} />);
+    expect(screen.getByLabelText(/Nội dung từ Frontend \(agent soạn\), chưa xác minh/)).toBeTruthy();
   });
-  it("follow_up and send_reply-from-sent require a body; the draft stays hidden from the other side", () => {
+  it("follow_up requires a body", () => {
     const onAction = vi.fn();
-    const r = { ...req("replied", { sentById: B, kind: "reply", authoredBy: "human" }), unreadForViewer: true };
-    render(<RequestCard request={r} asker={asker} receiver={receiver} viewerMemberId={A} onAction={onAction} />);
+    const r = { ...req("replied", { sentById: ME, kind: "reply", authorRoleId: B }), unreadForViewer: true };
+    render(<RequestCard request={r} asker={fe} receiver={be} viewerMemberId={ME} onAction={onAction} />);
     expect(document.querySelector("[data-unread]")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Hỏi lại" }));
     const send = screen.getByRole("button", { name: "Hỏi lại" }) as HTMLButtonElement;
@@ -66,12 +73,8 @@ describe("RequestCard", () => {
     fireEvent.click(send);
     expect(onAction).toHaveBeenCalledWith("follow_up", expect.anything(), "Thêm tag nữa nhé");
   });
-  it("hides the receiver's reply draft from the asker", () => {
-    render(<RequestCard request={req("reply_drafted", { kind: "reply", body: "BÍ MẬT nháp" })} asker={asker} receiver={receiver} viewerMemberId={A} />);
-    expect(screen.queryByText(/BÍ MẬT nháp/)).toBeNull();
-  });
   it("closed request shows no actions", () => {
-    render(<RequestCard request={req("closed", { sentById: A })} asker={asker} receiver={receiver} viewerMemberId={A} />);
+    render(<RequestCard request={req("closed", { sentById: ME })} asker={fe} receiver={be} viewerMemberId={ME} />);
     expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 });
@@ -83,7 +86,7 @@ describe("misc components", () => {
   });
   it("MemberCard shows Vietnamese presence label and waiting chips", () => {
     render(<MemberCard member={asker} waitingOnMembers={[receiver]}
-      status={{ memberId: A, presence: "waiting", doing: "Chờ tên biến", branch: "feat/x", waitingOn: [B], updatedAt: T, updatedBy: "agent" }} />);
+      status={{ roleId: A, presence: "waiting", doing: "Chờ tên biến", branch: "feat/x", paths: [], waitingOn: [B], updatedAt: T, updatedBy: "agent" }} />);
     expect(screen.getByText("Đang chờ")).toBeTruthy();
     expect(screen.getByLabelText("Đang chờ").textContent).toContain("Phong");
     expect(screen.getByText("Agent soạn · cập nhật hộ")).toBeTruthy();
@@ -188,21 +191,21 @@ describe("UntrustedQuote external author", () => {
 
 describe("RequestCard detail link", () => {
   it("renders inside the card footer, with the card's own box", () => {
-    render(<RequestCard request={req("closed", { sentById: A })} asker={asker} receiver={receiver} viewerMemberId={A} detailHref="/w/x/requests/1" />);
+    render(<RequestCard request={req("closed", { sentById: ME })} asker={fe} receiver={be} viewerMemberId={ME} detailHref="/w/x/requests/1" />);
     const link = screen.getByRole("link", { name: "Mở chi tiết và chuỗi trao đổi" });
     expect(link.getAttribute("href")).toBe("/w/x/requests/1");
     expect(link.closest("article")).toBeTruthy();
     expect(link.closest("footer")?.parentElement?.tagName).toBe("ARTICLE");
   });
   it("is absent without detailHref", () => {
-    render(<RequestCard request={req("closed", { sentById: A })} asker={asker} receiver={receiver} viewerMemberId={A} />);
+    render(<RequestCard request={req("closed", { sentById: ME })} asker={fe} receiver={be} viewerMemberId={ME} />);
     expect(screen.queryByRole("link")).toBeNull();
   });
 });
 
 describe("screen reader semantics", () => {
   it("MemberCard mascot reads 'Phong — đang làm'", () => {
-    render(<MemberCard member={receiver} status={{ memberId: B, presence: "working", doing: "x", branch: null, waitingOn: [], updatedAt: T, updatedBy: "human" }} />);
+    render(<MemberCard member={receiver} status={{ roleId: B, presence: "working", doing: "x", branch: null, paths: [], waitingOn: [], updatedAt: T, updatedBy: "human" }} />);
     expect(screen.getByRole("img", { name: "Phong — đang làm" })).toBeTruthy();
     expect(screen.getByRole("article", { name: "Phong — đang làm" })).toBeTruthy();
   });

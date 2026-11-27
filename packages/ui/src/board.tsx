@@ -111,6 +111,7 @@ export const EVENT_ICON: Record<EventType, IconName> = {
   "issue.opened": "issue", "issue.closed": "check", "request.created": "request", "request.sent": "send",
   "request.reply_drafted": "draft", "request.replied": "reply", "request.followed_up": "reply",
   "request.closed": "check", "request.reminded": "bell", "request.cancelled": "cancel", "decision.recorded": "decision", "status.updated": "status",
+  "decision.proposed": "decision", "decision.proposal_rejected": "cancel", "role.updated": "edit",
 };
 export const EVENT_LABEL_VI: Record<EventType, string> = {
   "pr.opened": "Mở PR", "pr.merged": "Đã merge PR", "pr.closed": "Đóng PR", "pr.review_requested": "Cần review PR",
@@ -119,6 +120,7 @@ export const EVENT_LABEL_VI: Record<EventType, string> = {
   "request.reply_drafted": "Có bản nháp trả lời", "request.replied": "Đã trả lời", "request.followed_up": "Hỏi lại",
   "request.closed": "Đã chấp nhận, đóng yêu cầu", "request.reminded": "Nhắc yêu cầu", "request.cancelled": "Huỷ yêu cầu", "decision.recorded": "Ghi quyết định",
   "status.updated": "Cập nhật trạng thái",
+  "decision.proposed": "Đề xuất quyết định", "decision.proposal_rejected": "Từ chối đề xuất", "role.updated": "Cập nhật vai trò",
 };
 const EVENT_BAD = new Set<EventType>(["ci.failed", "deploy.failed"]);
 

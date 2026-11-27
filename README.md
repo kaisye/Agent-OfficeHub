@@ -1,8 +1,8 @@
 # Office Hub
 
-A virtual office for software teams that work with coding agents. Each person's agent reads the team's real state and drafts structured requests. **Humans approve every send and every decision.** Each member appears on the board as a mascot whose mood shows what they are doing.
+A virtual office where **one person orchestrates several coding agents**. Each agent holds a role (Leader, Business, Design, Backend, Frontend, QA), reads the project's real state and drafts structured requests to other roles. **The orchestrator forwards every message between agents and records every decision.** Each role appears on the board as a mascot whose mood shows what it is doing.
 
-Status: pre-pilot (v0.3 contract), built for a 2-week pilot with the Tripflix team.
+Status: v0.6 (one orchestrator + role seats), see [docs/redesign-orchestrator.md](docs/redesign-orchestrator.md). Runs 24/7 on the team PC (`deploy/pc/up.sh`).
 
 ## Run it locally
 
@@ -11,16 +11,16 @@ Requirements: Node ≥ 22, pnpm 10, Docker.
 ```bash
 pnpm install
 cp .env.example .env   # then set DEV_LOGIN_ENABLED=true for local dev login
-pnpm db:seed           # first time only: Tripflix demo data
+pnpm db:seed           # first time only: workspace office-hub-dev, 6 roles, one agent token per role (printed once)
 
 pnpm dev               # Postgres (docker) + migrate + API :8787 + MCP :8788 + web :3000, one terminal
 ```
 
 `Ctrl+C` stops everything except Postgres (`pnpm db:down` stops that). For the UI alone with mock data and no database: `pnpm dev:ui`.
 
-Open http://localhost:3000/login and pick a member (dev login). For a UI-only demo with no database, run `pnpm dev:web` (the default mock mode).
+Open http://localhost:3000/login and sign in (dev login). For a UI-only demo with no database, run `pnpm dev:web` (the default mock mode).
 
-Connect Claude Code as an agent: create a token under **Agent của tôi**, then follow [docs/tech/agent-setup.md](docs/tech/agent-setup.md).
+Connect one Claude Code session per role: create a token for the role under **Agent**, then follow [docs/tech/agent-setup.md](docs/tech/agent-setup.md).
 
 ## Sign-in
 

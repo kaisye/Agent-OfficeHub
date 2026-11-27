@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { AgentRateLimiter, appSql, closeAll, hashPassword, verifyPassword } from "@officehub/db";
+import { AgentRateLimiter, adminSql, appSql, closeAll, hashPassword, verifyPassword } from "@officehub/db";
 import { makeAgentToken, makeWorkspace } from "@officehub/db/testing";
 import { Me } from "@officehub/shared";
 import { createApp } from "../src/app.js";
@@ -23,11 +23,12 @@ async function devLogin(h: ReturnType<typeof setup>, memberId: string) {
 const email = () => `u-${randomUUID().slice(0, 8)}@example.test`;
 const PW = "correct horse battery";
 
+/** The orchestrator invites themself (first password / reset), as `pnpm db:invite` does. */
 async function invited() {
   const h = setup();
   const w = await makeWorkspace("pw");
-  const admin = await devLogin(h, w.alice);
-  const r = await post(h, `/w/${w.slug}/members/${w.bob}/invite`, {}, admin);
+  const admin = await devLogin(h, w.orchestrator);
+  const r = await post(h, `/w/${w.slug}/members/${w.orchestrator}/invite`, {}, admin);
   expect(r.status).toBe(200);
   const { url } = (await r.json()) as { url: string };
   return { h, w, admin, url, token: url.split("/invite/")[1]! };
@@ -50,7 +51,7 @@ describe("invite → set password → login", () => {
 
     const info = await h.app.request(`/auth/invite/${token}`);
     expect(info.status).toBe(200);
-    expect(await info.json()).toMatchObject({ displayName: "Bob", email: null });
+    expect(await info.json()).toMatchObject({ displayName: "Orchestrator", email: null });
 
     const mail = email();
     const acc = await post(h, "/auth/invite/accept", { token, email: mail.toUpperCase(), password: PW });
@@ -64,7 +65,7 @@ describe("invite → set password → login", () => {
 
     const ok = await post(h, "/auth/login", { email: mail, password: PW });
     expect(ok.status).toBe(200);
-    expect(((await ok.json()) as { id: string }).id).toBe(w.bob);
+    expect(((await ok.json()) as { id: string }).id).toBe(w.orchestrator);
   });
 
   it("wrong password and unknown email give the same 401", async () => {
@@ -81,8 +82,11 @@ describe("invite → set password → login", () => {
   it("only admins can invite; short passwords and reused emails are rejected", async () => {
     const h = setup();
     const w = await makeWorkspace("pw");
-    const bob = await devLogin(h, w.bob);
-    expect((await post(h, `/w/${w.slug}/members/${w.alice}/invite`, {}, bob)).status).toBe(403);
+    // v0.6 has one human, but a non-admin member row is still possible: it must not be able to mint invites
+    const [m] = await adminSql()`INSERT INTO members (workspace_id, display_name, github_login, role, areas, mascot)
+      VALUES (${w.id}, 'Viewer', ${`viewer-${w.id.slice(0, 6)}`}, 'member', '{}'::text[], ${adminSql().json({ buddy: "blu" })}) RETURNING id`;
+    const viewer = await devLogin(h, m!.id as string);
+    expect((await post(h, `/w/${w.slug}/members/${w.orchestrator}/invite`, {}, viewer)).status).toBe(403);
 
     const first = await invited();
     expect((await post(first.h, "/auth/invite/accept", { token: first.token, email: email(), password: "short" })).status).toBe(400);
@@ -95,7 +99,7 @@ describe("invite → set password → login", () => {
 
   it("a new link revokes the older unused one", async () => {
     const { h, w, admin, token } = await invited();
-    await post(h, `/w/${w.slug}/members/${w.bob}/invite`, {}, admin);
+    await post(h, `/w/${w.slug}/members/${w.orchestrator}/invite`, {}, admin);
     expect((await h.app.request(`/auth/invite/${token}`)).status).toBe(404);
   });
 
@@ -111,9 +115,11 @@ describe("invite → set password → login", () => {
 
   it("agent tokens cannot log in or invite", async () => {
     const { h, w } = await invited();
-    const tok = (await makeAgentToken(w, "alice")).token;
+    const tok = (await makeAgentToken(w, "leader")).token;
     const r = await h.app.request("/auth/login", { method: "POST", headers: { ...H, authorization: `Bearer ${tok}` }, body: JSON.stringify({ email: email(), password: PW }) });
     expect(r.status).toBe(403);
+    const inv = await h.app.request(`/w/${w.slug}/members/${w.orchestrator}/invite`, { method: "POST", headers: { ...H, authorization: `Bearer ${tok}` }, body: "{}" });
+    expect(inv.status).toBe(403);
   });
 
   it("change password needs the current one and keeps only this session", async () => {

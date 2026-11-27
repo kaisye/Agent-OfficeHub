@@ -3,7 +3,7 @@
 /**
  * Mascots walking between desks on the office map.
  *
- * - A real exchange (request sent / replied / accepted) makes the sender's buddy walk to the other desk,
+ * - A real exchange (request forwarded / replied) makes the sending seat's buddy walk to the other desk,
  *   say the title in a bubble, then walk back. Driven by board.recentEvents (already filtered per viewer
  *   by the server, so nobody sees walks for requests they can't see).
  * - An agent draft never walks: nothing left the owner's hands yet. The buddy just "thinks" at its desk.
@@ -12,11 +12,16 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { mascotSrc } from "@officehub/brand";
-import type { Board, Member } from "@officehub/shared";
+import type { Board, Mascot } from "@officehub/shared";
+
+/** A desk on the map: a role, or the orchestrator's desk (id ORCHESTRATOR_SEAT). */
+export type Seat = { id: string; displayName: string; mascot: Mascot };
+export const ORCHESTRATOR_SEAT = "orchestrator";
+const seatOf = (roleId: string | null) => roleId ?? ORCHESTRATOR_SEAT;
 
 export type Walk = {
   id: string;
-  from: string; // member id
+  from: string; // seat id
   to: string | null; // null = think at own desk
   text: string;
   agent?: boolean;
@@ -76,14 +81,16 @@ export function useRequestTraffic(board: Board, enqueue: (w: Walk) => void) {
       switch (e.type) {
         case "request.sent":
         case "request.followed_up":
-          if (req) enqueue({ id: e.id, from: req.askerId, to: req.receiverId, text: e.type === "request.sent" ? title : `Hỏi thêm: ${title}` });
+          if (req) enqueue({ id: e.id, from: seatOf(req.askerRoleId), to: seatOf(req.receiverRoleId), text: e.type === "request.sent" ? title : `Hỏi thêm: ${title}` });
           break;
         case "request.replied":
-          if (req) enqueue({ id: e.id, from: req.receiverId, to: req.askerId, text: `Trả lời: ${title}` });
+          if (req) enqueue({ id: e.id, from: seatOf(req.receiverRoleId), to: seatOf(req.askerRoleId), text: `Trả lời: ${title}` });
           break;
         case "request.created":
+          if (req && e.actorAgentId) enqueue({ id: e.id, from: seatOf(req.askerRoleId), to: null, text: "Agent đang soạn nháp…", agent: true });
+          break;
         case "request.reply_drafted":
-          if (e.actorAgentId && e.actorMemberId) enqueue({ id: e.id, from: e.actorMemberId, to: null, text: "Agent đang soạn nháp…", agent: true });
+          if (req && e.actorAgentId) enqueue({ id: e.id, from: seatOf(req.receiverRoleId), to: null, text: "Agent đang soạn trả lời…", agent: true });
           break;
       }
     }
@@ -92,17 +99,16 @@ export function useRequestTraffic(board: Board, enqueue: (w: Walk) => void) {
 
 /* ---------------- demo traffic (visual only) ---------------- */
 const DEMO_LINES = [
-  "PR #219 xong review chưa?",
-  "Server staging ghim tag nào?",
-  "Cho mình tên biến môi trường",
-  "Xem giúp CI đỏ với",
-  "Chốt tách tag theo app nhé",
-  "Rebase deploy/ trước giúp mình",
-  "Cảm ơn nha!",
+  "Route này tên gì?",
+  "Contract có trường này chưa?",
+  "Xem giúp PR #41",
+  "Đã bàn giao, mời bạn",
+  "File này thuộc vùng ai?",
+  "CI đỏ ở bài E2E",
   "Ok, mình làm tiếp",
 ];
 
-export function useDemoTraffic(enabled: boolean, members: Member[], enqueue: (w: Walk) => void) {
+export function useDemoTraffic(enabled: boolean, members: Seat[], enqueue: (w: Walk) => void) {
   const list = useRef(members);
   list.current = members; // read the latest list without restarting the timer
   useEffect(() => {
@@ -172,7 +178,7 @@ function Walker({
   onDone,
 }: {
   walk: Walk;
-  member: Member | undefined;
+  member: Seat | undefined;
   floorRef: RefObject<HTMLDivElement | null>;
   deskRef: (id: string) => HTMLElement | undefined;
   reduced: boolean;
@@ -277,7 +283,7 @@ export function WalkerLayer({
   onDone,
 }: {
   walks: Walk[];
-  members: Member[];
+  members: Seat[];
   floorRef: RefObject<HTMLDivElement | null>;
   deskRef: (id: string) => HTMLElement | undefined;
   onAway: (id: string, away: boolean) => void;

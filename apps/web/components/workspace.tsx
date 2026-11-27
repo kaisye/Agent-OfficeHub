@@ -20,6 +20,11 @@ export function useWorkspace(): Ctx {
   return v;
 }
 
+/** Provides the workspace context directly (tests, storybook-like harnesses). */
+export function WorkspaceProvider({ slug, me, children }: Ctx & { children: ReactNode }) {
+  return <WorkspaceCtx.Provider value={{ slug, me }}>{children}</WorkspaceCtx.Provider>;
+}
+
 /** Auth gate + top nav + realtime subscription for everything under /w/[slug]. */
 export function WorkspaceShell({ children }: { children: ReactNode }) {
   const { slug } = useParams<{ slug: string }>();
