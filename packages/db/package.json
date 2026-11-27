@@ -13,6 +13,7 @@
     "migrate": "tsx src/cli-migrate.ts",
     "seed": "tsx src/cli-seed.ts",
     "invite": "tsx src/cli-invite.ts",
+    "seed:marketing": "tsx src/cli-seed-marketing.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
